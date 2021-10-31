@@ -1,26 +1,28 @@
+import itertools
 import numpy as np
+import random
 
 dim_x = 10
 dim_y = 10
-rf = 2 # current fire range
-rm = 6 # maximum fire range
-tf = 10 # fire evolution frequency
+rf = 2  # current fire range
+rm = 6  # maximum fire range
+tf = 10  # fire evolution frequency
 
+pedstrain = np.zeros((dim_x, dim_y))
 sff = np.zeros((dim_x, dim_y))
 
 # define exits
 exit_cells = frozenset((
-                        (dim_x // 2-1, dim_y - 1), (dim_x // 2, dim_y - 1),
-                        (dim_x - 1, dim_y//2) , (dim_x - 1, dim_y//2-1),
-                        (0, dim_y//2 -1) , (0, dim_y//2),
-                        (dim_x//2 -1, 0) , (dim_x//2, 0),
-    #(0,4), (0,5)
+    (dim_x // 2 - 1, dim_y - 1), (dim_x // 2, dim_y - 1),
+    (dim_x - 1, dim_y // 2), (dim_x - 1, dim_y // 2 - 1),
+    (0, dim_y // 2 - 1), (0, dim_y // 2),
+    (dim_x // 2 - 1, 0), (dim_x // 2, 0),
+    # (0,4), (0,5)
 ))
 # print(exit_cells)
 # print(np.zeros((10, 10), float))
 
-fire_cells = {(4, 4), (4,5), (5,4), (5,5)}
-
+fire_cells = {(4, 4), (4, 5), (5, 4), (5, 5)}
 
 
 # initialize walls to be 500
@@ -36,6 +38,7 @@ init_walls(exit_cells)
 
 print(sff)
 
+
 # get diagonal neighbors of a cell, return a list of cells
 def get_diag_neighbors(cell):
     neighbors = []
@@ -50,10 +53,10 @@ def get_diag_neighbors(cell):
         neighbors.append((i - 1, j + 1))
     return neighbors
 
+
 # get neighbors of a cell, default to be von Neumann neighborhood, if second argument = 1, then get moore neighbor
 # return a list of cells
 def get_neighbors(cell, moore=0):
-
     # von Neumann neighborhood
 
     neighbors = []
@@ -100,20 +103,20 @@ def init_sff_rec(_cell, _value):
     for n in neighbors:
         if n not in exit_cells:
             if sff[n] == 0:
-                init_sff_rec(n, _value+1)
+                init_sff_rec(n, _value + 1)
 
             else:
-                if sff[n] > _value+1:
-                    init_sff_rec(n, _value+1)
+                if sff[n] > _value + 1:
+                    init_sff_rec(n, _value + 1)
 
     for n in diag_neighbors:
         if n not in exit_cells:
             if sff[n] == 0:
-                init_sff_rec(n, _value+1.5)
+                init_sff_rec(n, _value + 1.5)
 
             else:
-                if sff[n] > _value+1.5:
-                    init_sff_rec(n, _value+1.5)
+                if sff[n] > _value + 1.5:
+                    init_sff_rec(n, _value + 1.5)
 
 
 init_sff(exit_cells)
@@ -124,7 +127,7 @@ print(sff)
 def update_fire():
     '''todo: further add more rules'''
     for i in fire_cells:
-        sff[i] = 500
+        sff[i] = 499
 
 
 # fire evolution by tf
@@ -136,7 +139,7 @@ def fire_evolution(t):
 
     tmp = set()
     if t % tf == 0 and rf != rm:
-        rf = rf+2
+        rf = rf + 2
         for i in fire_cells:
             neighbors = get_neighbors(i, 1)
             for j in neighbors:
@@ -149,7 +152,56 @@ def fire_evolution(t):
 print(fire_cells)
 fire_evolution(10)
 print(fire_cells)
-fire_evolution(20)
-print(fire_cells)
-fire_evolution(30)
-print(fire_cells)
+
+
+# fire_evolution(20)
+# print(fire_cells)
+# fire_evolution(30)
+# print(fire_cells)
+
+class Rectangle:  # [A,B]
+                  # [C,D]
+    def __init__(self, X, Y, W, H):  # (x,y) are left most coordinates, H height, W width of the box
+
+        self.x = X
+
+        self.y = Y
+
+        self.w = W
+
+        self.h = H
+        co = self.all_coordinates()
+        for i in co:
+            if i in fire_cells:
+                raise Exception("Fire cells included")
+            if i[0] == 0 or i[1] == 0:
+                raise Exception("Wall cells included")
+
+
+    def complete(self):
+        return self.x, self.y, self.w, self.h
+
+
+    def range(self):  # return {A,B,C,D}
+        return [(self.x, self.y), (self.x + self.w, self.y), (self.x, self.y - self.h), (self.x + self.w, self.y - self.h)]
+
+
+    def all_coordinates(self):  # return all coordinates
+        return list(itertools.product(range(self.x, self.x + self.w + 1), range(self.y - self.h, self.y + 1)))
+
+
+rec = Rectangle(1, 2, 1, 1)
+print(rec.range())
+print(rec.all_coordinates())
+
+
+def generate_pedestrain(num, rectangle):
+    pedestrain_cells = random.sample(rectangle.all_coordinates(), num)
+    print(pedestrain_cells)
+    for i in pedestrain_cells:
+        pedstrain[i] = 999
+
+
+generate_pedestrain(1, rec)
+print(sff)
+print(pedstrain)
