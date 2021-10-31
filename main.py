@@ -1,6 +1,7 @@
 import itertools
-import numpy as np
 import random
+
+import numpy as np
 
 dim_x = 10
 dim_y = 10
@@ -160,7 +161,7 @@ print(fire_cells)
 # print(fire_cells)
 
 class Rectangle:  # [A,B]
-                  # [C,D]
+    # [C,D]
     def __init__(self, X, Y, W, H):  # (x,y) are left most coordinates, H height, W width of the box
 
         self.x = X
@@ -170,6 +171,8 @@ class Rectangle:  # [A,B]
         self.w = W
 
         self.h = H
+
+        # check range
         co = self.all_coordinates()
         for i in co:
             if i in fire_cells:
@@ -177,14 +180,12 @@ class Rectangle:  # [A,B]
             if i[0] == 0 or i[1] == 0:
                 raise Exception("Wall cells included")
 
-
     def complete(self):
         return self.x, self.y, self.w, self.h
 
-
     def range(self):  # return {A,B,C,D}
-        return [(self.x, self.y), (self.x + self.w, self.y), (self.x, self.y - self.h), (self.x + self.w, self.y - self.h)]
-
+        return [(self.x, self.y), (self.x + self.w, self.y), (self.x, self.y - self.h),
+                (self.x + self.w, self.y - self.h)]
 
     def all_coordinates(self):  # return all coordinates
         return list(itertools.product(range(self.x, self.x + self.w + 1), range(self.y - self.h, self.y + 1)))
@@ -195,13 +196,27 @@ print(rec.range())
 print(rec.all_coordinates())
 
 
-def generate_pedestrain(num, rectangle):
+def generate_pedestrain_rand(num, rectangle):
     pedestrain_cells = random.sample(rectangle.all_coordinates(), num)
     print(pedestrain_cells)
     for i in pedestrain_cells:
         pedstrain[i] = 999
 
 
-generate_pedestrain(1, rec)
+def generate_pedestrain(rec):
+    if isinstance(rec, Rectangle):
+        for i in rectangle.all_coordinates():
+            pedstrain[i] = 999
+    if isinstance(rec, tuple):
+        if rec in fire_cells:
+            raise Exception("Fire cells included")
+        if rec[0] == 0 or rec[1] == 0:
+            raise Exception("Wall cells included")
+        pedstrain[rec] = 999
+
+
+generate_pedestrain_rand(1, rec)
 print(sff)
+print(pedstrain)
+generate_pedestrain((9, 9))
 print(pedstrain)
