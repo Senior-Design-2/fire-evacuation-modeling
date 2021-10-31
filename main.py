@@ -9,7 +9,8 @@ rf = 2  # current fire range
 rm = 6  # maximum fire range
 tf = 10  # fire evolution frequency
 
-pedstrain = np.zeros((dim_x, dim_y))
+pedestrain_matrix = np.zeros((dim_x, dim_y))
+pedestrains = []
 sff = np.zeros((dim_x, dim_y))
 
 # define exits
@@ -190,6 +191,35 @@ class Rectangle:  # [A,B]
     def all_coordinates(self):  # return all coordinates
         return list(itertools.product(range(self.x, self.x + self.w + 1), range(self.y - self.h, self.y + 1)))
 
+class Pedestrain:
+    def __init__(self, coord):
+        if coord in fire_cells:
+            raise Exception("Fire cells included")
+        if coord in fire_cells:
+            raise Exception("Fire cells included")
+        self.now = coord
+        self.x = coord[0]
+        self.y = coord[1]
+        if self.x == 0 or self.y == 0:
+            raise Exception("Wall cells included")
+        if pedestrain_matrix[coord] == 999:
+            raise Exception("There is already a pedestrain at {}".format(self.now))
+        self.last = coord #last position
+        pedestrain_matrix[coord]=999
+
+    def step(self):
+        self.last = self.now
+        # self.now =
+
+    @staticmethod
+    def update_cell():
+        for i in pedestrains:
+            pedestrain_matrix[i.now] = 999
+
+    def __str__(self):
+        return str(self.now)
+
+
 
 rec = Rectangle(1, 2, 1, 1)
 print(rec.range())
@@ -198,25 +228,38 @@ print(rec.all_coordinates())
 
 def generate_pedestrain_rand(num, rectangle):
     pedestrain_cells = random.sample(rectangle.all_coordinates(), num)
-    print(pedestrain_cells)
     for i in pedestrain_cells:
-        pedstrain[i] = 999
+        pedestrains.append(Pedestrain(i))
 
 
-def generate_pedestrain(rec):
-    if isinstance(rec, Rectangle):
-        for i in rectangle.all_coordinates():
-            pedstrain[i] = 999
-    if isinstance(rec, tuple):
-        if rec in fire_cells:
+def generate_pedestrain(x): #x is a tuple|Rectangle
+    if isinstance(x, Rectangle):
+        for i in x.all_coordinates():
+            pedestrains.append(Pedestrain(i))
+    if isinstance(x, tuple):
+        if x in fire_cells:
             raise Exception("Fire cells included")
-        if rec[0] == 0 or rec[1] == 0:
+        if x[0] == 0 or x[1] == 0:
             raise Exception("Wall cells included")
-        pedstrain[rec] = 999
+        pedestrains.append(Pedestrain(x))
 
 
-generate_pedestrain_rand(1, rec)
-print(sff)
-print(pedstrain)
+# generate_pedestrain_rand(1, rec)
+# print(sff)
+# print(pedestrain_matrix)
+# for i in pedestrains:
+#     print("pedestrains:")
+#     print(i)
+
+
 generate_pedestrain((9, 9))
-print(pedstrain)
+print(pedestrain_matrix)
+for i in pedestrains:
+    print("pedestrains:")
+    print(i)
+
+generate_pedestrain(rec)
+print(pedestrain_matrix)
+for i in pedestrains:
+    print("pedestrains:")
+    print(i)
