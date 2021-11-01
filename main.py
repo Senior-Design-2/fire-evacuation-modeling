@@ -8,7 +8,7 @@ dim_y = 10
 rf = 2  # current fire range
 rm = 6  # maximum fire range
 tf = 10  # fire evolution frequency
-
+w = 1.3  # w is a weight for I in the papaer
 pedestrain_matrix = np.zeros((dim_x, dim_y))
 pedestrains = []
 sff = np.zeros((dim_x, dim_y))
@@ -33,7 +33,7 @@ def init_walls(exit_cells):
 
     # initialize exit
     for e in exit_cells:
-        sff[e] = -1
+        sff[e] = 0.0001
 
 
 init_walls(exit_cells)
@@ -88,12 +88,15 @@ def get_neighbors(cell, moore=0):
 
 # initial static floor field
 def init_sff(exit_cells):
+    global sff
     for e in exit_cells:
         e_neighbor = get_neighbors(e)
         # print(e_neighbor)
         for c in e_neighbor:
             if c not in exit_cells:
                 init_sff_rec(c, 1)
+    print(sff)
+    sff = np.where(sff != 500, 1 / sff, 500)  # reverse S field value
 
 
 # a recursive function to initialize static floor field
@@ -191,6 +194,7 @@ class Rectangle:  # [A,B]
     def all_coordinates(self):  # return all coordinates
         return list(itertools.product(range(self.x, self.x + self.w + 1), range(self.y - self.h, self.y + 1)))
 
+
 class Pedestrain:
     def __init__(self, coord):
         if coord in fire_cells:
@@ -204,12 +208,19 @@ class Pedestrain:
             raise Exception("Wall cells included")
         if pedestrain_matrix[coord] == 999:
             raise Exception("There is already a pedestrain at {}".format(self.now))
-        self.last = coord #last position
-        pedestrain_matrix[coord]=999
+        self.last = coord  # last position
+        pedestrain_matrix[coord] = 999
+        self.I = np.ones((3, 3), dtype=np.float64)
 
     def step(self):
+        pedestrain_matrix[self.now] = 0
         self.last = self.now
-        # self.now =
+        neighbors = get_neighbors(self.now, moore=1)
+        dic = {sff[i]: i for i in neighbors}
+        next_cell = dic[max(dic.keys())]
+        self.now = next_cell
+        pedestrain_matrix[self.now] = 999
+        self.update_I()
 
     @staticmethod
     def update_cell():
@@ -219,6 +230,16 @@ class Pedestrain:
     def __str__(self):
         return str(self.now)
 
+    def get_I(self):
+        print(self.I)
+
+    def update_I(self):
+        self.I = self.I = np.ones((3, 3), dtype=np.float64)
+        dir = tuple(map(lambda i, j: i - j, self.now, self.last))
+        self.I[(dir[0] + 1, -dir[1] + 1)] = w
+
+    # def burned(self):
+    #
 
 
 rec = Rectangle(1, 2, 1, 1)
@@ -232,7 +253,7 @@ def generate_pedestrain_rand(num, rectangle):
         pedestrains.append(Pedestrain(i))
 
 
-def generate_pedestrain(x): #x is a tuple|Rectangle
+def generate_pedestrain(x):  # x is a tuple|Rectangle
     if isinstance(x, Rectangle):
         for i in x.all_coordinates():
             pedestrains.append(Pedestrain(i))
@@ -252,14 +273,26 @@ def generate_pedestrain(x): #x is a tuple|Rectangle
 #     print(i)
 
 
-generate_pedestrain((9, 9))
-print(pedestrain_matrix)
-for i in pedestrains:
-    print("pedestrains:")
-    print(i)
+# generate_pedestrain((9, 9))
+# print(pedestrain_matrix)
+#
+# generate_pedestrain(rec)
+# print(pedestrain_matrix)
+# for i in pedestrains:
+#     print("pedestrains:")
+#     print(i)
 
-generate_pedestrain(rec)
 print(pedestrain_matrix)
-for i in pedestrains:
-    print("pedestrains:")
-    print(i)
+me = Pedestrain((1, 1))
+pedestrains.append(me)
+print(pedestrain_matrix)
+me.get_I()
+me.step()
+print(pedestrain_matrix)
+me.get_I()
+me.step()
+print(pedestrain_matrix)
+me.step()
+print(pedestrain_matrix)
+me.step()
+print(pedestrain_matrix)
