@@ -2,6 +2,7 @@ import itertools
 import random
 
 import numpy as np
+from matplotlib import pyplot as plt
 
 dim_x = 10
 dim_y = 10
@@ -30,10 +31,11 @@ fire_cells = {(4, 4), (4, 5), (5, 4), (5, 5)}
 # initialize walls to be 500
 def init_walls(exit_cells):
     sff[0, :] = sff[-1, :] = sff[:, -1] = sff[:, 0] = 500
-
+    pedestrain_matrix[0, :] = pedestrain_matrix[-1, :] = pedestrain_matrix[:, -1] = pedestrain_matrix[:, 0] = 500
     # initialize exit
     for e in exit_cells:
         sff[e] = 0.0001
+        pedestrain_matrix[e] = 0
 
 
 init_walls(exit_cells)
@@ -132,7 +134,7 @@ print(sff)
 def update_fire():
     '''todo: further add more rules'''
     for i in fire_cells:
-        sff[i] = 499
+        pedestrain_matrix[i] = 499
 
 
 # fire evolution by tf
@@ -155,7 +157,7 @@ def fire_evolution(t):
 
 
 print(fire_cells)
-fire_evolution(10)
+fire_evolution(1)
 print(fire_cells)
 
 
@@ -286,13 +288,62 @@ print(pedestrain_matrix)
 me = Pedestrain((1, 1))
 pedestrains.append(me)
 print(pedestrain_matrix)
-me.get_I()
-me.step()
-print(pedestrain_matrix)
-me.get_I()
-me.step()
-print(pedestrain_matrix)
-me.step()
-print(pedestrain_matrix)
-me.step()
-print(pedestrain_matrix)
+# print(pedestrain_matrix)
+# me.get_I()
+# me.step()
+# print(pedestrain_matrix)
+# me.get_I()
+# me.step()
+# print(pedestrain_matrix)
+# me.step()
+# print(pedestrain_matrix)
+# me.step()
+# print(pedestrain_matrix)
+
+import sys
+import numpy as np
+import random
+import matplotlib.pyplot as plt
+import matplotlib.colors
+from matplotlib import cm
+from matplotlib.colors import ListedColormap, LinearSegmentedColormap,BoundaryNorm
+import matplotlib.animation as animation
+import copy
+
+def Update(frameNum, img, oldGrid, nC):
+    me.step()
+    newGrid=pedestrain_matrix
+    displayGrid = copy.deepcopy(newGrid)
+    img.set_data(displayGrid)
+    oldGrid[:, :] = newGrid[:, :]
+    return img
+
+def animate():
+    light_gray = np.array([220 / 256, 220 / 256, 220 / 256, 1])
+    green = np.array([50 / 256, 200 / 256, 50 / 256, 1])
+    red = np.array([255 / 256, 90 / 256, 90 / 256, 1])
+    coffee = np.array([111/256, 78/256, 55/256, 1])
+    newColors = np.zeros((4, 4))
+    newColors[0, :] = light_gray
+    newColors[1, :] = red
+    newColors[2, :] = coffee
+    newColors[3, :] = green
+    print(newColors)
+    Cmap = ListedColormap(newColors)
+    boundary_norm = BoundaryNorm([-0.5, 498.5, 499.5, 500.5, 999.5], Cmap.N)
+
+
+    fig, ax = plt.subplots()
+    ax.axis('off')
+
+    oldGrid = pedestrain_matrix
+
+    img = ax.imshow(oldGrid, cmap=Cmap, interpolation='nearest', norm=boundary_norm)
+    ani = animation.FuncAnimation(fig, Update, fargs=(img, oldGrid, 10),
+                                  frames=128,
+                                  interval=200,
+                                  repeat=False)
+    f = r'C:\Users\shuox\Desktop\test.mp4'
+    ani.save(f, writer='ffmpeg', fps=1)
+
+animate()
