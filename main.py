@@ -454,12 +454,11 @@ print(rec.all_coordinates())
 #
 
 generate_pedestrain(rec)
-for i in pedestrains:
-    i.update()
 
 while(1):
     for i in pedestrains:
         i.step()
+    update_dff()
     init_dff_diff()
     print(pedestrain_matrix)
 
