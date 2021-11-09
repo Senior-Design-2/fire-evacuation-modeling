@@ -15,11 +15,15 @@ ks = 1.0
 kd = 1.0
 kf = 1.0
 time = 1
+alpha = 0.2 # coeffision for diffusion
+delta = 0.2 # coeefision for decay
 
 myLambda = 0.50  # Sedation probability increase coefficient
 pedestrain_matrix = np.zeros((dim_x, dim_y))
 pedestrains = []
 sff = np.zeros((dim_x, dim_y))
+dff = np.zeros((dim_x, dim_y)) # dynamic floor field
+dff_diff = np.zeros((dim_x, dim_y)) # dff difference matrix, update current grid then add to dff through update_dff function
 
 # define exits
 exit_cells = frozenset((
@@ -155,9 +159,29 @@ def init_sff_rec(_cell, _value):
                 if sff[n] > _value + sqrt(2):
                     init_sff_rec(n, _value + sqrt(2))
 
-
+'''
 init_sff(exit_cells)
 print(sff)
+'''
+
+
+def init_dff_diff():
+    global dff_diff
+    dff_diff = np.zeros((dim_x, dim_y))
+
+
+def update_dff():
+    global dff, dff_diff
+    dff += dff_diff
+
+    # iter through all cells in the grid
+    for i, j in itertools.chain(itertools.product(range(1, dim_x - 1), range(1, dim_y - 1)), exit_cells):
+        for _ in range(int(dff[i, j])):
+            if np.random.rand() < delta: # decay
+                dff[i, j] -= 1
+            elif np.random.rand() < alpha: # diffusion
+                dff[i, j] -= 1
+                dff[random.choice(get_neighbors((i, j)))] += 1
 
 
 # update fire
@@ -185,11 +209,11 @@ def fire_evolution(t):
     fire_cells = fire_cells.union(tmp)
     update_fire()
 
-
+'''
 print(fire_cells)
 fire_evolution(1)
 print(fire_cells)
-
+'''
 
 # fire_evolution(20)
 # print(fire_cells)
@@ -248,6 +272,9 @@ class Pedestrain:
         else:
             self.update()
             pedestrain_matrix[self.now] = 0
+            if self.last != self.now:
+                dff_diff[self.last] += 1
+
             self.last = self.now
             max = np.max(self.P)
             max_index = np.where(self.P == max)
@@ -267,7 +294,7 @@ class Pedestrain:
 
     def update_P(self):  # overall probability
         print(self.get_S(), "\n I:",self.I, "\n n: ",self.n,"\n epsilon:", self.epsilon, "\n F:",self.F)
-        self.P = (np.exp(ks * self.get_S()) * np.exp(kd*1)*self.I*(1-self.n)*self.epsilon)/np.exp(kf*self.F)
+        self.P = (np.exp(ks * self.get_S()) * np.exp(kd* self.get_D())*self.I*(1-self.n)*self.epsilon)/np.exp(kf*self.F)
         print("P: ", self.P)
 
     @staticmethod
@@ -383,6 +410,10 @@ class Pedestrain:
         else:
             return s
 
+    def get_D(self):
+        d = dff[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
+        return d
+
 
     # def burned(self):
     #
@@ -429,6 +460,7 @@ for i in pedestrains:
 while(1):
     for i in pedestrains:
         i.step()
+    init_dff_diff()
     print(pedestrain_matrix)
 
 
@@ -464,7 +496,6 @@ while(1):
 # print(pedestrain_matrix)
 
 
-import numpy as np
 import random
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, BoundaryNorm
@@ -473,7 +504,7 @@ import copy
 
 
 def Update(frameNum, img, oldGrid, nC):
-    me.step()
+    #me.step()
     newGrid = pedestrain_matrix
     displayGrid = copy.deepcopy(newGrid)
     img.set_data(displayGrid)
@@ -505,5 +536,5 @@ def animate():
                                   frames=128,
                                   interval=200,
                                   repeat=False)
-    f = r'C:\Users\shuox\Desktop\test.mp4'
+    f = r'.\test.mp4'
     ani.save(f, writer='ffmpeg', fps=1)
