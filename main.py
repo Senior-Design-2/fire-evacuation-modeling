@@ -460,6 +460,7 @@ while(1):
         i.step()
     update_dff()
     init_dff_diff()
+
     print(pedestrain_matrix)
 
 
