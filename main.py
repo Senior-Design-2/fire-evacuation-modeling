@@ -1,5 +1,6 @@
 import itertools
 import math
+import random
 from math import sqrt
 
 import numpy
@@ -34,7 +35,6 @@ exit_cells = frozenset((
     # (0,4), (0,5)
 ))
 # print(exit_cells)
-# print(np.zeros((10, 10), float))
 
 fire_cells = {(4, 4), (4, 5), (5, 4), (5, 5)}
 
@@ -49,7 +49,6 @@ def init_walls(exit_cells):
         pedestrain_matrix[e] = 0
 
 
-init_walls(exit_cells)
 
 
 
@@ -159,11 +158,6 @@ def init_sff_rec(_cell, _value):
                 if sff[n] > _value + sqrt(2):
                     init_sff_rec(n, _value + sqrt(2))
 
-'''
-init_sff(exit_cells)
-print(sff)
-'''
-
 
 def init_dff_diff():
     global dff_diff
@@ -209,11 +203,8 @@ def fire_evolution(t):
     fire_cells = fire_cells.union(tmp)
     update_fire()
 
-'''
-print(fire_cells)
-fire_evolution(1)
-print(fire_cells)
-'''
+
+
 
 # fire_evolution(20)
 # print(fire_cells)
@@ -253,6 +244,7 @@ class Rectangle:  # [A,B]
 
 class Pedestrain:
     def __init__(self, coord):
+        self.exit = 0 # 1 if pedestrain exited successfuly
         if coord in fire_cells:
             raise Exception("Fire cells included")
         if coord in fire_cells:
@@ -268,13 +260,13 @@ class Pedestrain:
 
     def step(self):
         if self.now in exit_cells:
-            print("Exited successfully")
+            self.exit = 1
+            pedestrain_matrix[self.now]=0
         else:
             self.update()
             pedestrain_matrix[self.now] = 0
             if self.last != self.now:
                 dff_diff[self.last] += 1
-
             self.last = self.now
             max = np.max(self.P)
             max_index = np.where(self.P == max)
@@ -293,9 +285,9 @@ class Pedestrain:
         self.update_P()
 
     def update_P(self):  # overall probability
-        print(self.get_S(), "\n I:",self.I, "\n n: ",self.n,"\n epsilon:", self.epsilon, "\n F:",self.F)
+        print(self.now,"\n S:\n", self.get_S(), "\n I:\n",self.I, "\n n:\n",self.n,"\n epsilon:\n", self.epsilon, "\n F:\n",self.F, "\n")
         self.P = (np.exp(ks * self.get_S()) * np.exp(kd* self.get_D())*self.I*(1-self.n)*self.epsilon)/np.exp(kf*self.F)
-        print("P: ", self.P)
+        print("P: \n", self.P)
 
     @staticmethod
     def update_cell():
@@ -445,23 +437,26 @@ def generate_pedestrain(x):  # x is a tuple|Rectangle
 #     print("pedestrains:")
 #     print(i)
 
-rec = Rectangle(1, 2, 1, 1)
-print(rec.all_coordinates())
+init_walls(exit_cells)
+init_sff(exit_cells)
+update_fire()
 
+rec = Rectangle(1, 2, 1, 1)
 
 # generate_pedestrain((9, 9))
 # print(pedestrain_matrix)
-#
-
 generate_pedestrain(rec)
-
-while(1):
+#
+for i in range(4):
+    print(sff)
+    print("\n-----------------------------",time)
+    time+=1
     for i in pedestrains:
         i.step()
+        print(pedestrain_matrix)
     update_dff()
     init_dff_diff()
-
-    print(pedestrain_matrix)
+    fire_evolution(time)
 
 
 
@@ -495,7 +490,7 @@ while(1):
 # # me.get_epsilon()
 # print(pedestrain_matrix)
 
-
+#
 import random
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, BoundaryNorm
@@ -504,7 +499,8 @@ import copy
 
 
 def Update(frameNum, img, oldGrid, nC):
-    #me.step()
+    for i in pedestrains:
+        i.step()
     newGrid = pedestrain_matrix
     displayGrid = copy.deepcopy(newGrid)
     img.set_data(displayGrid)
@@ -538,3 +534,5 @@ def animate():
                                   repeat=False)
     f = r'.\test.mp4'
     ani.save(f, writer='ffmpeg', fps=1)
+
+# animate()
