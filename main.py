@@ -1,30 +1,30 @@
 import itertools
 import math
+import numpy
+import numpy as np
 import random
 from math import sqrt
 
-import numpy
-import numpy as np
-
-dim_x = 10
-dim_y = 10
+dim_x = 20
+dim_y = 20
 rf = 2  # current fire range
 rm = 6  # maximum fire range
 tf = 10  # fire evolution frequency
-w = 1.3  # w is a weight for I in the papaer
-ks = 1.0
-kd = 1.0
-kf = 1.0
-time = 1
-alpha = 0.2 # coeffision for diffusion
-delta = 0.2 # coeefision for decay
-
+w = 1.05  # w is a weight for I in the papaer
+ks = 0.5
+kd = 0.2
+kf = 0.3
+time = 0
+alpha = 0.2  # coeffision for diffusion
+delta = 0.2  # coeefision for decay
 myLambda = 0.50  # Sedation probability increase coefficient
+
 pedestrain_matrix = np.zeros((dim_x, dim_y))
 pedestrains = []
 sff = np.zeros((dim_x, dim_y))
-dff = np.zeros((dim_x, dim_y)) # dynamic floor field
-dff_diff = np.zeros((dim_x, dim_y)) # dff difference matrix, update current grid then add to dff through update_dff function
+dff = np.zeros((dim_x, dim_y))  # dynamic floor field
+dff_diff = np.zeros(
+    (dim_x, dim_y))  # dff difference matrix, update current grid then add to dff through update_dff function
 
 # define exits
 exit_cells = frozenset((
@@ -45,11 +45,8 @@ def init_walls(exit_cells):
     pedestrain_matrix[0, :] = pedestrain_matrix[-1, :] = pedestrain_matrix[:, -1] = pedestrain_matrix[:, 0] = 500
     # initialize exit
     for e in exit_cells:
-        sff[e] = 0.0001
+        sff[e] = 0.1
         pedestrain_matrix[e] = 0
-
-
-
 
 
 # get diagonal neighbors of a cell, return a list of cells
@@ -129,7 +126,6 @@ def init_sff(exit_cells):
         for c in e_neighbor:
             if c not in exit_cells:
                 init_sff_rec(c, 1)
-    print(sff)
     sff = np.where(sff != 500, 1 / sff, 0)  # reverse S field value
     print(sff)
 
@@ -171,9 +167,9 @@ def update_dff():
     # iter through all cells in the grid
     for i, j in itertools.chain(itertools.product(range(1, dim_x - 1), range(1, dim_y - 1)), exit_cells):
         for _ in range(int(dff[i, j])):
-            if np.random.rand() < delta: # decay
+            if np.random.rand() < delta:  # decay
                 dff[i, j] -= 1
-            elif np.random.rand() < alpha: # diffusion
+            elif np.random.rand() < alpha:  # diffusion
                 dff[i, j] -= 1
                 dff[random.choice(get_neighbors((i, j)))] += 1
 
@@ -202,8 +198,6 @@ def fire_evolution(t):
 
     fire_cells = fire_cells.union(tmp)
     update_fire()
-
-
 
 
 # fire_evolution(20)
@@ -241,10 +235,14 @@ class Rectangle:  # [A,B]
     def all_coordinates(self):  # return all coordinates
         return list(itertools.product(range(self.x, self.x + self.w + 1), range(self.y - self.h, self.y + 1)))
 
-
+intend_list = []
 class Pedestrain:
     def __init__(self, coord):
-        self.exit = 0 # 1 if pedestrain exited successfuly
+        if coord[0] == 0 or coord[1] == 0 or coord[0]==dim_x-1 or coord[1]==dim_y-1:
+            raise Exception("Wall cells included")
+        if coord in fire_cells:
+            raise  Exception("Fire cells included")
+        self.exited = 0  # 1 if pedestrain exited successfuly
         if coord in fire_cells:
             raise Exception("Fire cells included")
         if coord in fire_cells:
@@ -259,34 +257,46 @@ class Pedestrain:
         pedestrain_matrix[coord] = 999
 
     def step(self):
-        if self.now in exit_cells:
-            self.exit = 1
-            pedestrain_matrix[self.now]=0
+        print("\nPedstrain: ", self.now)
+        if self.now in exit_cells: # exit successfully
+            self.exited = 1
+            pedestrain_matrix[self.now] = 0
         else:
-            self.update()
             pedestrain_matrix[self.now] = 0
             if self.last != self.now:
                 dff_diff[self.last] += 1
-            self.last = self.now
             max = np.max(self.P)
             max_index = np.where(self.P == max)
-            dir = (max_index[0][0]-1, max_index[1][0]-1)
-            self.now  = tuple(self.now+np.array(dir))
+            dir = (max_index[0][0] - 1, max_index[1][0] - 1)
+            self.last = self.now
+            temp = tuple(self.now + np.array(dir))
+            while temp in intend_list:
+                self.P[self.P == max] = 0
+                max = np.max(self.P)
+                max_index = np.where(self.P == max)
+                dir = (max_index[0][0] - 1, max_index[1][0] - 1)
+                temp = tuple(self.now + np.array(dir))
+            self.now = temp
             self.update_xy()
+            intend_list.append(self.now)
             pedestrain_matrix[self.now] = 999
+            print(self.now)
 
     def update(self):
-        self.update_I()
-        self.update_F()
-        self.update_epsilon()
-        self.update_n()
-        self.update_H()
-        self.update_Pc()
-        self.update_P()
+        if self.now not in exit_cells:
+            self.update_I()
+            self.update_F()
+            self.update_epsilon()
+            self.update_n()
+            self.update_H()
+            self.update_Pc()
+            self.update_P()
 
     def update_P(self):  # overall probability
-        print(self.now,"\n S:\n", self.get_S(), "\n I:\n",self.I, "\n n:\n",self.n,"\n epsilon:\n", self.epsilon, "\n F:\n",self.F, "\n")
-        self.P = (np.exp(ks * self.get_S()) * np.exp(kd* self.get_D())*self.I*(1-self.n)*self.epsilon)/np.exp(kf*self.F)
+        print( "\nPedestrain: ", self.last, self.now, "\n S:\n", self.get_S(), "\n I:\n", self.I, "\n n:\n", self.n, "\n epsilon:\n", self.epsilon,
+              "\n F:\n", self.F, "\n")
+        self.P = (np.exp(ks * self.get_S()) * np.exp(kd * 1) * self.I * (1 - self.n) * self.epsilon) / np.exp(
+            kf * self.F)
         print("P: \n", self.P)
 
     @staticmethod
@@ -305,8 +315,8 @@ class Pedestrain:
         print("I:", self.I)
         return self.I
 
-    def update_I(self): # I -> inertia filed
-        self.I = np.ones((3, 3), dtype=np.float64)
+    def update_I(self):  # I -> inertia filed
+        self.I = np.ones((3, 3), dtype=np.longdouble)
         if self.now == self.last:
             return self.I
         dir = tuple(map(lambda i, j: i - j, self.now, self.last))
@@ -331,7 +341,7 @@ class Pedestrain:
         neighbors.append(self.now)
         for i in neighbors:
             self.F[i[0] - x, i[1] - y] = self.compute_H(i)
-        self.F = 1/self.F
+        self.F = 1 / self.F
         sum = 0
         for i in self.F:
             sum += i
@@ -376,7 +386,7 @@ class Pedestrain:
     def update_epsilon(self):  # update obstacle matrix,  epsilon is [] when pedestrian on the border/exit
         temp = pedestrain_matrix[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
         self.epsilon = np.where(temp == 500, 0, 1)
-        if self.epsilon.size == 0: # epsilon is [] when pedestrian on the border/exit
+        if self.epsilon.size == 0:  # epsilon is [] when pedestrian on the border/exit
             self.epsilon = numpy.zeros((3, 3))
 
     def get_epsilon(self):
@@ -387,7 +397,7 @@ class Pedestrain:
         temp = pedestrain_matrix[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
         # print(temp)
         self.n = np.where(temp == 999, 1, 0)
-        if self.n.size != 0: # n is [] when pedestrian on the border/exit
+        if self.n.size != 0:  # n is [] when pedestrian on the border/exit
             self.n[1, 1] = 0
         else:
             self.n = numpy.ones((3, 3))
@@ -406,10 +416,8 @@ class Pedestrain:
         d = dff[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
         return d
 
-
     # def burned(self):
     #
-
 
 
 def generate_pedestrain_rand(num, rectangle):
@@ -425,72 +433,11 @@ def generate_pedestrain(x):  # x is a tuple|Rectangle
     if isinstance(x, tuple):
         if x in fire_cells:
             raise Exception("Fire cells included")
-        if x[0] == 0 or x[1] == 0:
+        if x[0] == 0 or x[1] == 0 or x[0]==dim_x-1 or x[1]==dim_y-1:
             raise Exception("Wall cells included")
         pedestrains.append(Pedestrain(x))
 
 
-# generate_pedestrain_rand(1, rec)
-# print(sff)
-# print(pedestrain_matrix)
-# for i in pedestrains:
-#     print("pedestrains:")
-#     print(i)
-
-init_walls(exit_cells)
-init_sff(exit_cells)
-update_fire()
-
-rec = Rectangle(1, 2, 1, 1)
-
-# generate_pedestrain((9, 9))
-# print(pedestrain_matrix)
-generate_pedestrain(rec)
-#
-for i in range(4):
-    print(sff)
-    print("\n-----------------------------",time)
-    time+=1
-    for i in pedestrains:
-        i.step()
-        print(pedestrain_matrix)
-    update_dff()
-    init_dff_diff()
-    fire_evolution(time)
-
-
-
-
-# print(pedestrain_matrix)
-# me = Pedestrain((1, 1))
-# pedestrains.append(me)
-# print(pedestrain_matrix)
-# # me.get_I()
-# # me.get_H()
-# # me.get_Pc()
-# # me.get_epsilon()
-# me.step()
-# # me.get_I()
-# # me.get_H()
-# # me.get_Pc()
-# # me.get_epsilon()
-# print(pedestrain_matrix)
-#
-# me.step()
-# # me.get_I()
-# # me.get_H()
-# # me.get_Pc()
-# # me.get_epsilon()
-# print(pedestrain_matrix)
-#
-# me.step()
-# # me.get_I()
-# # me.get_H()
-# # me.get_Pc()
-# # me.get_epsilon()
-# print(pedestrain_matrix)
-
-#
 import random
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, BoundaryNorm
@@ -499,8 +446,7 @@ import copy
 
 
 def Update(frameNum, img, oldGrid, nC):
-    for i in pedestrains:
-        i.step()
+    one_step()
     newGrid = pedestrain_matrix
     displayGrid = copy.deepcopy(newGrid)
     img.set_data(displayGrid)
@@ -534,5 +480,78 @@ def animate():
                                   repeat=False)
     f = r'.\test.mp4'
     ani.save(f, writer='ffmpeg', fps=1)
+
+
+# generate_pedestrain_rand(1, rec)
+# print(sff)
+# print(pedestrain_matrix)
+# for i in pedestrains:
+#     print("pedestrains:")
+#     print(i)
+def init():
+    init_walls(exit_cells)
+    init_sff(exit_cells)
+    update_fire()
+
+
+# generate_pedestrain((9, 9))
+# print(pedestrain_matrix)
+
+def one_step():
+    global time, pedestrains, pedestrain_matrix, intend_list
+    print("\n-----------------------------", time)
+    for i in pedestrains:
+        if i.exited == 0:
+            i.update()
+    for i in pedestrains:
+        if i.exited == 0:
+            i.step()
+            print(pedestrain_matrix)
+    intend_list = []
+    update_dff()
+    init_dff_diff()
+    time += 1
+    fire_evolution(time)
+
+
+init()
+rec = Rectangle(1, 2, 1, 1)
+generate_pedestrain(rec)
+rec = Rectangle(10, 10, 7, 7)
+generate_pedestrain_rand(20,rec)
+animate()
+# for i in range(4):
+#     one_step()
+
+
+# print(pedestrain_matrix)
+# me = Pedestrain((1, 1))
+# pedestrains.append(me)
+# print(pedestrain_matrix)
+# # me.get_I()
+# # me.get_H()
+# # me.get_Pc()
+# # me.get_epsilon()
+# me.step()
+# # me.get_I()
+# # me.get_H()
+# # me.get_Pc()
+# # me.get_epsilon()
+# print(pedestrain_matrix)
+#
+# me.step()
+# # me.get_I()
+# # me.get_H()
+# # me.get_Pc()
+# # me.get_epsilon()
+# print(pedestrain_matrix)
+#
+# me.step()
+# # me.get_I()
+# # me.get_H()
+# # me.get_Pc()
+# # me.get_epsilon()
+# print(pedestrain_matrix)
+
 
 # animate()
