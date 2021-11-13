@@ -10,9 +10,9 @@ dim_y = 100
 
 tf = 10  # fire evolution frequency
 w = 1.05  # w is a weight for I in the paper
-ks = 0.5
-kd = 0.2
-kf = 0.1
+ks = 2
+kd = 0.01
+kf = 0.05
 alpha = 0.2  # coeffision for diffusion
 delta = 0.2  # coeefision for decay
 myLambda = 0.50  # Sedation probability increase coefficient
@@ -113,7 +113,6 @@ def init_sff(exit_cells):
             if c not in exit_cells:
                 init_sff_rec(c, 1)
     sff = np.where(sff != 500, 1 / sff, 0)  # reverse S field value
-    print(sff)
 
 
 # a recursive function to initialize static floor field
@@ -276,8 +275,8 @@ class Pedestrain:
 
     def update_P(self):  # overall probability
         print( "\nPedestrain: ", self.last, self.now, "\n S:\n", self.get_S(), "\n I:\n", self.I, "\n n:\n", self.n, "\n epsilon:\n", self.epsilon,
-              "\n F:\n", self.F, "\n")
-        self.P = (np.exp(ks * self.get_S()) * np.exp(kd * 1) * self.I * (1 - self.n) * self.epsilon) / np.exp(
+              "\n F:\n", self.F, "\n D:\n", self.get_D(),"\n")
+        self.P = (np.exp(ks * self.get_S()) * np.exp(kd * self.get_D()) * self.I * (1 - self.n) * self.epsilon) / np.exp(
             kf * self.F)
         print("P: \n", self.P)
 
@@ -323,9 +322,9 @@ class Pedestrain:
         neighbors.append(self.now)
         for i in neighbors:
             self.F[i[0] - x, i[1] - y] = self.compute_H(i)
-        print("F____________", self.F)
+        # print("F____________", self.F)
         self.F = np.where(self.F == 0, 999999,  1 / self.F) # Fire field overlap with fire cells, to avoid 1/0 error ,set it to 0.01
-        print("F____________", self.F)
+        # print("F____________", self.F)
         sum = 0
         for i in self.F.flatten():
             sum += i
@@ -451,7 +450,7 @@ def animate():
     img = ax.imshow(visual_field, cmap=Cmap, interpolation='nearest', norm=boundary_norm)
 
     ani = animation.FuncAnimation(fig, Update, fargs=(img, ), init_func=init,
-                                  frames=200,
+                                  frames=10,
                                   interval=300,
                                   repeat=False)
     f = r'.\test.mp4'
@@ -468,12 +467,13 @@ def init():
         # (dim_x // 2 - 1, 0), (dim_x // 2, 0),
     ))
     # fire_cells = {(4, 4), (4, 5), (5, 4), (5, 5)}
-    fire_cells = {(4, 50)}
+    rec_fire = Rectangle(int((dim_x-2)/2-1), int((dim_y-2)/2-1),1,1)
+    fire_cells = set(rec_fire.all_coordinates())
     init_walls(exit_cells)
     init_sff(exit_cells)
     #Assign pedestrains
-    rec = Rectangle(1, 1, 7, 97)
-    generate_pedestrain_rand(50, rec)
+    rec = Rectangle(1, 1, dim_x-3, dim_y-3)
+    generate_pedestrain_rand(40,rec)
 
 
 def one_step(time):
@@ -481,19 +481,25 @@ def one_step(time):
     occupied_cells = []
     print("\n-----------------------------", time)
     fire_evolution(time)
+    temp = np.copy(visual_field)
     for i in pedestrains:
         if i.status == 0:
             i.update()
+            # i.step()
+            # print(visual_field)
+    for i in pedestrains:
+        if i.status == 0:
             i.step()
+            print(temp)
             print(visual_field)
-    # for i in pedestrains:
-    #     if i.status == 0:
-    #         i.step()
-    #         print(visual_field)
     update_dff()
     init_dff_diff()
 
 
-# for i in range(20):
-#     one_step()
+def test():
+    init()
+    for i in range(3):
+        one_step(i)
+
 animate()
+# test()
