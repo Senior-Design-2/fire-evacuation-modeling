@@ -1,21 +1,22 @@
 import itertools
 import math
-import numpy
-import numpy as np
-import random
 from math import sqrt
 
-dim_x = 10
-dim_y = 100
+import numpy
+import numpy as np
 
-tf = 10  # fire evolution frequency
+dim_x = 15
+dim_y = 70
+
+tf = 15  # fire evolution frequency
 w = 1.05  # w is a weight for I in the paper
-ks = 2
-kd = 0.01
-kf = 0.05
+ks = 0.5
+kd = 0.2
+kf = 0.3
 alpha = 0.2  # coeffision for diffusion
 delta = 0.2  # coeefision for decay
-myLambda = 0.50  # Sedation probability increase coefficient
+myLambda = 0.50  # Sedation probability increase coefficient, ps: lambda increase sedation probability increase
+gamma = 70  # If distance to fire border is larger than γ , Fij = 0,
 
 pedestrains = []
 visual_field = np.zeros((dim_x, dim_y))
@@ -25,34 +26,40 @@ dff_diff = np.zeros(
     (dim_x, dim_y))  # dff difference matrix, update current grid then add to dff through update_dff function
 
 
-# initialize walls to be 500
+# initialize walls to be 99999
 def init_walls(exit_cells):
-    sff[0, :] = sff[-1, :] = sff[:, -1] = sff[:, 0] = 500
-    visual_field[0, :] = visual_field[-1, :] = visual_field[:, -1] = visual_field[:, 0] = 500
+    sff[0, :] = sff[-1, :] = sff[:, -1] = sff[:, 0] = 99999
+    visual_field[0, :] = visual_field[-1, :] = visual_field[:, -1] = visual_field[:, 0] = 99999
     # initialize exit
     for e in exit_cells:
-        sff[e] = 0.1
+        sff[e] = 0
         visual_field[e] = 0
+
+
+def init_obstal(obstal):
+    for i in obstal:
+        sff[i] = 99999
+        visual_field[i] = 99999
 
 
 # get diagonal neighbors of a cell, return a list of cells
 def get_diag_neighbors(cell):
     neighbors = []
     i, j = cell
-    if i >= 1 and j >= 1 and sff[(i - 1, j - 1)] != 500:
+    if i >= 1 and j >= 1 and sff[(i - 1, j - 1)] != 99999:
         neighbors.append((i - 1, j - 1))
-    if i < dim_x - 1 and j < dim_y - 1 and sff[(i + 1, j + 1)] != 500:
+    if i < dim_x - 1 and j < dim_y - 1 and sff[(i + 1, j + 1)] != 99999:
         neighbors.append((i + 1, j + 1))
-    if i < dim_x - 1 and j >= 1 and sff[(i + 1, j - 1)] != 500:
+    if i < dim_x - 1 and j >= 1 and sff[(i + 1, j - 1)] != 99999:
         neighbors.append((i + 1, j - 1))
-    if i >= 1 and j < dim_y - 1 and sff[(i - 1, j + 1)] != 500:
+    if i >= 1 and j < dim_y - 1 and sff[(i - 1, j + 1)] != 99999:
         neighbors.append((i - 1, j + 1))
     return neighbors
 
 
 # get neighbors of a cell, default to be von Neumann neighborhood, if second argument = 1, then get moore neighbor
 # return a list of cells
-def get_neighbors(cell, moore=0, ignore_val=500):
+def get_neighbors(cell, moore=0, ignore_val=99999):
     # von Neumann neighborhood
     neighbors = []
     i, j = cell
@@ -108,11 +115,11 @@ def init_sff(exit_cells):
     global sff
     for e in exit_cells:
         e_neighbor = get_neighbors(e)
-        # print(e_neighbor)
         for c in e_neighbor:
             if c not in exit_cells:
                 init_sff_rec(c, 1)
-    sff = np.where(sff != 500, 1 / sff, 0)  # reverse S field value
+
+    # sff = np.where(sff==99999,0,1/sff)
 
 
 # a recursive function to initialize static floor field
@@ -176,7 +183,7 @@ def fire_evolution(t):
     tmp = set()
     if t % tf == 0:
         for i in fire_cells:
-            neighbors = get_neighbors(i, 1, 0)
+            neighbors = get_neighbors(i, 1, 99999)
             for j in neighbors:
                 tmp.add(j)
     fire_cells = fire_cells.union(tmp)
@@ -190,78 +197,131 @@ def fire_evolution(t):
 
 class Rectangle:  # [A,B]
     # [C,D]
-    def __init__(self, X, Y, W, H):  # (x,y) are left most coordinates, H height, W width of the box
+    def __init__(self, X, Y, H, W):  # (x,y) are left most coordinates, H height, W width of the box
 
         self.x = X
 
         self.y = Y
 
-        self.w = W
-
         self.h = H
+
+        self.w = W
 
         # check range
         co = self.all_coordinates()
         for i in co:
-            if i[0] == 0 or i[1] == 0 or i[0] == dim_x-1 or i[1] == dim_y-1:
+            if i[0] == 0 or i[1] == 0 or i[0] == dim_x - 1 or i[1] == dim_y - 1:
                 raise Exception("Wall cells {} included".format(i))
 
     def complete(self):
-        return self.x, self.y, self.w, self.h
+        return self.x, self.y, self.h, self.w
 
     def range(self):  # return {A,B,C,D}
-        return [(self.x, self.y), (self.x + self.w, self.y), (self.x, self.y - self.h),
-                (self.x + self.w, self.y - self.h)]
+        return [(self.x, self.y), (self.x + self.h, self.y), (self.x, self.y - self.w),
+                (self.x + self.h, self.y - self.w)]
 
     def all_coordinates(self):  # return all coordinates
-        return list(itertools.product(range(self.x, self.x + self.w + 1), range(self.y, self.y + self.h+1)))
+        return list(itertools.product(range(self.x, self.x + self.h + 1), range(self.y, self.y + self.w + 1)))
 
 
 class Pedestrain:
     def __init__(self, coord):
-        if coord[0] == 0 or coord[1] == 0 or coord[0]==dim_x-1 or coord[1]==dim_y-1:
+        if coord[0] == 0 or coord[1] == 0 or coord[0] == dim_x - 1 or coord[1] == dim_y - 1:
             raise Exception("Wall cells included")
         self.status = 0  # 1 if pedestrain exited successfuly, 2 if pedestrain died in the fire
         self.now = coord
         self.update_xy()
-        if self.x == 0 or self.y == 0:
-            raise Exception("Wall cells included")
         if visual_field[coord] == 999:
             raise Exception("There is already a pedestrain at {}".format(self.now))
         self.last = coord  # last position
         visual_field[coord] = 999
 
-    def step(self):
-        print("\nPedstrain: ", self.now)
-        if self.now in exit_cells: # exit successfully
+    def step(self, decision="max"):
+        assert decision == "max" or decision == "probability"
+        print("\nPedstrain: ", self.last, self.now)
+        if self.now in exit_cells:  # exit successfully
             self.status = 1
             visual_field[self.now] = 0
-        elif self.now in fire_cells: # died
+        elif self.now in fire_cells:  # died
             self.status = 2
             visual_field[self.now] = 1000
         else:
             visual_field[self.now] = 0
             if self.last != self.now:
                 dff_diff[self.last] += 1
-            max = np.max(self.P)
-            max_index = np.where(self.P == max)
-            dir = (max_index[0][0] - 1, max_index[1][0] - 1)
             self.last = self.now
-            temp = tuple(self.now + np.array(dir))
-            while temp in occupied_cells or temp in fire_cells:
-                self.P[self.P == max] = 0
-                max = np.max(self.P)
-                max_index = np.where(self.P == max)
-                dir = (max_index[0][0] - 1, max_index[1][0] - 1)
+
+            if random.random() > self.Pc:  # crazy
+                print("Pc:", self.Pc)
+                neighors = get_neighbors_including_wall(self.now, 1)
+                dic = {}
+                for i in neighors:
+                    projection_norm = np.dot(np.array(i) - self.now,
+                                             np.array(self.closet_fire_cell) - self.now) / np.sqrt(
+                        sum((np.array(i) - self.now) ** 2))
+                    dic[tuple(np.array(i) - self.now)] = projection_norm
+                print(dic)
+                dir = min(dic, key=dic.get)  # return the key of the minimum value
                 temp = tuple(self.now + np.array(dir))
-                # print("\nPedestrain: ", self.last, self.now, "\n S:\n", self.get_S(), "\n I:\n", self.I, "\n n:\n",
-                #       self.n, "\n epsilon:\n", self.epsilon,
-                #       "\n F:\n", self.F, "\n", self.P)
-            self.now = temp
-            self.update_xy()
-            occupied_cells.append(self.now)
-            visual_field[self.now] = 999
-            print(self.now)
+                while visual_field[temp] != 0 or temp in occupied_cells:  # find aviliable cell
+                    dic.pop(dir)
+                    if not dic:  # dic is empty, stay
+                        occupied_cells.append(self.now)
+                        visual_field[self.now] = 998
+                        print(self.now)
+                        return 0
+                    dir = min(dic, key=dic.get)
+                    temp = tuple(self.now + np.array(dir))
+                self.now = temp
+                self.update_xy()
+                occupied_cells.append(self.now)
+                visual_field[self.now] = 998
+                print(self.now)
+
+            else:
+                print("\n S:\n", self.get_S(), "\n I:\n", self.I, "\n n:\n",
+                      self.n,
+                      "\n epsilon:\n", self.epsilon,
+                      "\n F:\n", self.F, "\n D:\n", self.get_D(), "\n P: \n", self.P)
+                if decision == "probability":
+                    index = np.random.choice(9, p=self.P.flatten())
+                    indexes = [i for i, x in np.ndenumerate(self.P)]
+                    next = indexes[index]
+                    dir = (next[0] - 1, next[1] - 1)
+                    temp = tuple(self.now + np.array(dir))
+                    while temp in occupied_cells:
+                        index = np.random.choice(9, p=self.P.flatten())
+                        next = indexes[index]
+                        dir = (next[0] - 1, next[1] - 1)
+                        temp = tuple(self.now + np.array(dir))
+                    self.now = temp
+                    self.update_xy()
+                    occupied_cells.append(self.now)
+                    visual_field[self.now] = 999
+                    print(self.now)
+                else:
+                    max = np.max(self.P)
+                    index = np.where(self.P == max)
+                    max_index = (index[0][0], index[1][0])
+                    dir = (max_index[0] - 1, max_index[1] - 1)
+                    temp = tuple(self.now + np.array(dir))
+                    while temp in occupied_cells or temp in fire_cells:
+                        self.P[max_index] = 0
+                        max = np.max(self.P)
+                        index = np.where(self.P == max)
+                        max_index = (index[0][0], index[1][0])
+                        dir = (max_index[0] - 1, max_index[1] - 1)
+                        temp = tuple(self.now + np.array(dir))
+                        # print("\nPedestrain: ", self.last, self.now, "\n S:\n", self.get_S(), "\n I:\n", self.I, "\n n:\n",
+                        #       self.n,
+                        #       "\n epsilon:\n", self.epsilon,
+                        #       "\n F:\n", self.F, "\n D:\n", self.get_D(), "\n", self.P)
+                        # print(temp)
+                    self.now = temp
+                    self.update_xy()
+                    occupied_cells.append(self.now)
+                    visual_field[self.now] = 999
+                    print(self.now)
 
     def update(self):
         if self.now not in exit_cells and self.now not in fire_cells:
@@ -274,11 +334,11 @@ class Pedestrain:
             self.update_P()
 
     def update_P(self):  # overall probability
-        print( "\nPedestrain: ", self.last, self.now, "\n S:\n", self.get_S(), "\n I:\n", self.I, "\n n:\n", self.n, "\n epsilon:\n", self.epsilon,
-              "\n F:\n", self.F, "\n D:\n", self.get_D(),"\n")
-        self.P = (np.exp(ks * self.get_S()) * np.exp(kd * self.get_D()) * self.I * (1 - self.n) * self.epsilon) / np.exp(
+        self.P = (np.exp(ks * self.get_S()) * np.exp(kd * 1) * self.I * (
+                1 - self.n) * self.epsilon) / np.exp(
             kf * self.F)
-        print("P: \n", self.P)
+        sum = np.sum(self.P)
+        self.P = self.P / sum
 
     @staticmethod
     def update_cell():
@@ -293,7 +353,6 @@ class Pedestrain:
         self.y = self.now[1]
 
     def get_I(self):
-        print("I:", self.I)
         return self.I
 
     def update_I(self):  # I -> inertia filed
@@ -322,13 +381,24 @@ class Pedestrain:
         neighbors.append(self.now)
         for i in neighbors:
             self.F[i[0] - x, i[1] - y] = self.compute_H(i)
-        # print("F____________", self.F)
-        self.F = np.where(self.F == 0, 999999,  1 / self.F) # Fire field overlap with fire cells, to avoid 1/0 error ,set it to 0.01
-        # print("F____________", self.F)
+        print("F: ", self.F)
+        s = sff[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
+        cof1 = np.where(self.F > gamma, 0, 1)  # rule 1 coffession
+        print("cof1", cof1)
+
+        cof2 = np.where(s < 6, 0.5, 1)  # rule 2 coffession
+        print("cof2", cof2)
+        mask = np.nonzero(self.F)
+        self.F[mask] = 1 / self.F[mask]
+        self.F[self.F == 0] = 100  # Fire field overlap with fire cells, to avoid 1/0 error ,set it to 0.01
+        self.F = self.F * cof1
         sum = 0
         for i in self.F.flatten():
-            sum += i
-        self.F = self.F / sum
+            if i != 100:
+                sum += i
+        if sum != 0:
+            self.F = self.F / sum
+        self.F = self.F * cof2
 
     def get_F(self):
         return self.F
@@ -365,7 +435,7 @@ class Pedestrain:
 
     def update_epsilon(self):  # update obstacle matrix,  epsilon is [] when pedestrian on the border/exit
         temp = visual_field[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
-        self.epsilon = np.where(temp == 500, 0, 1)
+        self.epsilon = np.where(temp == 99999, 0, 1)
         if self.epsilon.size == 0:  # epsilon is [] when pedestrian on the border/exit
             self.epsilon = numpy.zeros((3, 3))
 
@@ -374,22 +444,25 @@ class Pedestrain:
 
     def update_n(self):  # update target cell occupation matrix, n is [] when pedestrian on the border/exit
         temp = visual_field[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
-        # print(temp)
-        self.n = np.where(temp == 999, 1, 0)
-        if self.n.size != 0:  # n is [] when pedestrian on the border/exit
-            self.n[1, 1] = 0
-        else:
-            self.n = numpy.ones((3, 3))
+        temp[temp == 998] = 999
+        self.n = np.where((temp == 999), 1, 0)
+        self.n[1, 1] = 0
+        # if self.n.size != 0:  # n is [] when pedestrian on the border/exit
+        #     self.n[1, 1] = 0
+        # else:
+        #     self.n = numpy.ones((3, 3))
 
     def get_n(self):
         return self.n
 
     def get_S(self):
         s = sff[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
-        if s.size == 0:
-            return numpy.ones((3, 3))
-        else:
-            return s
+        s = s[1, 1] - s
+        for i in range(3):
+            for j in range(3):
+                if i + j == 0 or i + j == 2 or i + j == 4:
+                    s[i][j] = s[i][j] / sqrt(2)
+        return s
 
     def get_D(self):
         d = dff[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
@@ -411,7 +484,7 @@ def generate_pedestrain(x):  # x is a tuple|Rectangle
     if isinstance(x, tuple):
         if x in fire_cells:
             raise Exception("Fire cells included")
-        if x[0] == 0 or x[1] == 0 or x[0]==dim_x-1 or x[1]==dim_y-1:
+        if x[0] == 0 or x[1] == 0 or x[0] == dim_x - 1 or x[1] == dim_y - 1:
             raise Exception("Wall cells included")
         pedestrains.append(Pedestrain(x))
 
@@ -421,8 +494,9 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, BoundaryNorm
 import matplotlib.animation as animation
 
-def Update(frame, img,):
-    if frame == 0: # skip 0
+
+def Update(frame, img, ):
+    if frame == 0:  # skip 0
         return img
     one_step(frame)
     img.set_data(visual_field)
@@ -430,28 +504,16 @@ def Update(frame, img,):
 
 
 def animate():
-    light_gray = np.array([220 / 256, 220 / 256, 220 / 256, 1])
-    green = np.array([50 / 256, 200 / 256, 50 / 256, 1])
-    red = np.array([255 / 256, 90 / 256, 90 / 256, 1])
-    coffee = np.array([111 / 256, 78 / 256, 55 / 256, 1])
-    black = np.array([0, 0, 0, 1])
-    newColors = np.zeros((5, 4))
-    newColors[0, :] = light_gray
-    newColors[1, :] = red
-    newColors[2, :] = coffee
-    newColors[3, :] = green
-    newColors[4, :] = black
-
-    Cmap = ListedColormap(newColors)
-    boundary_norm = BoundaryNorm([-0.5, 498.5, 499.5, 500.5, 999.5, 1000.5], Cmap.N)
+    Cmap = ListedColormap(['w', 'r', 'm', 'g', 'k', 'peru'])
+    boundary_norm = BoundaryNorm([-0.5, 498.5, 499.5, 998.5, 999.5, 1000.5, 99999.5], Cmap.N)
 
     fig, ax = plt.subplots()
     ax.axis('off')
     img = ax.imshow(visual_field, cmap=Cmap, interpolation='nearest', norm=boundary_norm)
 
-    ani = animation.FuncAnimation(fig, Update, fargs=(img, ), init_func=init,
-                                  frames=10,
-                                  interval=300,
+    ani = animation.FuncAnimation(fig, Update, fargs=(img,), init_func=init,
+                                  frames=500,
+                                  interval=200,
                                   repeat=False)
     f = r'.\test.mp4'
     ani.save(f, writer='ffmpeg', fps=1)
@@ -467,13 +529,16 @@ def init():
         # (dim_x // 2 - 1, 0), (dim_x // 2, 0),
     ))
     # fire_cells = {(4, 4), (4, 5), (5, 4), (5, 5)}
-    rec_fire = Rectangle(int((dim_x-2)/2-1), int((dim_y-2)/2-1),1,1)
+    rec_fire = Rectangle(int((dim_x - 2) / 2), int((dim_y - 2) / 2), 1, 1)
     fire_cells = set(rec_fire.all_coordinates())
     init_walls(exit_cells)
+    obstacal = Rectangle(9, int(dim_y / 2 / 2), 4, 10)
+    init_obstal(obstacal.all_coordinates())
     init_sff(exit_cells)
-    #Assign pedestrains
-    rec = Rectangle(1, 1, dim_x-3, dim_y-3)
-    generate_pedestrain_rand(40,rec)
+    # Assign pedestrains
+    rec = Rectangle(1, 1, dim_x - 3, dim_y - 3)
+    generate_pedestrain_rand(200, rec)
+    print(sff)
 
 
 def one_step(time):
@@ -489,7 +554,7 @@ def one_step(time):
             # print(visual_field)
     for i in pedestrains:
         if i.status == 0:
-            i.step()
+            i.step("max")
             print(temp)
             print(visual_field)
     update_dff()
@@ -498,8 +563,21 @@ def one_step(time):
 
 def test():
     init()
-    for i in range(3):
+    for i in range(4):
         one_step(i)
 
+
+#
+#
 animate()
 # test()
+# exit_cells = frozenset((
+#         (dim_x // 2 - 1, dim_y - 1), (dim_x // 2, dim_y - 1),
+#         # (dim_x - 1, dim_y // 2), (dim_x - 1, dim_y // 2 - 1),
+#         # (0, dim_y // 2 - 1), (0, dim_y // 2),
+#         # (dim_x // 2 - 1, 0), (dim_x // 2, 0),
+#     ))
+#
+# init_walls(exit_cells)
+# init_sff(exit_cells)
+# print(1)
