@@ -5,18 +5,19 @@ from math import sqrt
 import numpy
 import numpy as np
 
-dim_x = 15
-dim_y = 70
+file_name = r'.\test4.mp4'
+dim_x =20
+dim_y =20
 
-tf = 15  # fire evolution frequency
+tf = 20  # fire evolution frequency
 w = 1.05  # w is a weight for I in the paper
 ks = 0.5
 kd = 0.2
 kf = 0.3
 alpha = 0.2  # coeffision for diffusion
 delta = 0.2  # coeefision for decay
-myLambda = 0.50  # Sedation probability increase coefficient, ps: lambda increase sedation probability increase
-gamma = 70  # If distance to fire border is larger than γ , Fij = 0,
+myLambda = 0.5  # 0.5 # Sedation probability increase coefficient, ps: lambda increase sedation probability increase
+gamma = 30  # If distance to fire border is larger than γ , Fij = 0,
 
 pedestrains = []
 visual_field = np.zeros((dim_x, dim_y))
@@ -251,8 +252,8 @@ class Pedestrain:
                 dff_diff[self.last] += 1
             self.last = self.now
 
-            if random.random() > self.Pc:  # crazy
-                print("Pc:", self.Pc)
+            if random.random() > self.Pc and not self.in_catwalk():  # Pedestrian is panic
+                print("Pc:", self.Pc, self.F)
                 neighors = get_neighbors_including_wall(self.now, 1)
                 dic = {}
                 for i in neighors:
@@ -388,16 +389,17 @@ class Pedestrain:
 
         cof2 = np.where(s < 6, 0.5, 1)  # rule 2 coffession
         print("cof2", cof2)
+
         mask = np.nonzero(self.F)
         self.F[mask] = 1 / self.F[mask]
-        self.F[self.F == 0] = 100  # Fire field overlap with fire cells, to avoid 1/0 error ,set it to 0.01
+        self.F[self.F == 0] = 1000  # Fire field overlap with fire cells, to avoid 1/0 error ,set it to 0.01
         self.F = self.F * cof1
         sum = 0
         for i in self.F.flatten():
-            if i != 100:
+            if i != 1000:
                 sum += i
         if sum != 0:
-            self.F = self.F / sum
+            self.F = np.where(self.F != 1000, self.F / sum, 1000)
         self.F = self.F * cof2
 
     def get_F(self):
@@ -457,6 +459,7 @@ class Pedestrain:
 
     def get_S(self):
         s = sff[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
+        print(s)
         s = s[1, 1] - s
         for i in range(3):
             for j in range(3):
@@ -467,6 +470,17 @@ class Pedestrain:
     def get_D(self):
         d = dff[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
         return d
+
+    def in_catwalk(self):  # decide if pedestrian is in a catwalk, return T, F
+        wall = self.epsilon
+        fire = [self.F > 1]
+        wall = [wall == 0]
+        result = np.logical_or(fire, wall)
+        count = (result == False).sum()
+        print(result)
+        if count <= 4:
+            return True
+        return False
 
 
 def generate_pedestrain_rand(num, rectangle):
@@ -494,12 +508,75 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, BoundaryNorm
 import matplotlib.animation as animation
 
+# Statistic variable
+time = []
+left = []
+dead = []
+exited = []
+panic = []
 
-def Update(frame, img, ):
+
+def record(frame):
+    global left, dead, time, exited, panic
+    count = 0
+    count_dead = 0
+    count_exited = 0
+    for i in pedestrains:
+        if i.status == 0:
+            count += 1
+        elif i.status == 1:
+            count_exited += 1
+        else:
+            count_dead += 1
+
+    count_panic = (visual_field == 998).sum()
+    time.append(frame)
+    left.append(count)
+    dead.append(count_dead)
+    exited.append(count_exited)
+    panic.append(count_panic)
+
+
+def plot():
+    fig, ax = plt.subplots()
+    ax.set_xlabel('time step')
+    ax.set_ylabel('num of people')
+    ax.yaxis.set_ticks(np.arange(0, left[0] + left[0]//10, left[0]//10))
+    ax.plot(time, left,
+            color='b',
+            linewidth=1.0,
+            label="people left"
+            )
+    ax.plot(time, dead,
+            color='r',
+            linewidth=1.0,
+            label="people dead"
+            )
+    ax.plot(time, exited,
+            color='g',
+            linewidth=1.0,
+            label="people exited"
+            )
+    ax.plot(time, panic,
+            color='m',
+            linewidth=1.0,
+            label="people panic"
+            )
+    ax.legend()
+    plt.savefig(file_name[:-3]+"png")
+
+
+# Animation
+def Update(frame, img, ax):
+    record(frame)
     if frame == 0:  # skip 0
+        ax.set_title(frame)
+        img.set_data(visual_field)
         return img
     one_step(frame)
+    ax.set_title(frame)
     img.set_data(visual_field)
+
     return img
 
 
@@ -511,11 +588,11 @@ def animate():
     ax.axis('off')
     img = ax.imshow(visual_field, cmap=Cmap, interpolation='nearest', norm=boundary_norm)
 
-    ani = animation.FuncAnimation(fig, Update, fargs=(img,), init_func=init,
+    ani = animation.FuncAnimation(fig, Update, fargs=(img, ax,), init_func=init,
                                   frames=500,
                                   interval=200,
                                   repeat=False)
-    f = r'.\test.mp4'
+    f = file_name
     ani.save(f, writer='ffmpeg', fps=1)
 
 
@@ -528,16 +605,23 @@ def init():
         # (0, dim_y // 2 - 1), (0, dim_y // 2),
         # (dim_x // 2 - 1, 0), (dim_x // 2, 0),
     ))
+
     # fire_cells = {(4, 4), (4, 5), (5, 4), (5, 5)}
-    rec_fire = Rectangle(int((dim_x - 2) / 2), int((dim_y - 2) / 2), 1, 1)
+    rec_fire = Rectangle(int((dim_x - 2) / 2), int((dim_y - 2) / 2)-4, 1, 1)
     fire_cells = set(rec_fire.all_coordinates())
+    update_fire()
     init_walls(exit_cells)
-    obstacal = Rectangle(9, int(dim_y / 2 / 2), 4, 10)
-    init_obstal(obstacal.all_coordinates())
+
+    # Assign obstacle
+    # obstacal = Rectangle(10, int(dim_y / 2), 6, 1)
+    # init_obstal(obstacal.all_coordinates())
+
+    #sff
     init_sff(exit_cells)
     # Assign pedestrains
     rec = Rectangle(1, 1, dim_x - 3, dim_y - 3)
-    generate_pedestrain_rand(200, rec)
+    generate_pedestrain_rand(50, rec)
+    # generate_pedestrain(((5, 1)))
     print(sff)
 
 
@@ -567,9 +651,8 @@ def test():
         one_step(i)
 
 
-#
-#
 animate()
+plot()
 # test()
 # exit_cells = frozenset((
 #         (dim_x // 2 - 1, dim_y - 1), (dim_x // 2, dim_y - 1),
@@ -577,7 +660,6 @@ animate()
 #         # (0, dim_y // 2 - 1), (0, dim_y // 2),
 #         # (dim_x // 2 - 1, 0), (dim_x // 2, 0),
 #     ))
-#
 # init_walls(exit_cells)
 # init_sff(exit_cells)
 # print(1)
