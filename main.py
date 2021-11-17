@@ -6,8 +6,8 @@ import numpy
 import numpy as np
 
 file_name = r'.\test4.mp4'
-dim_x =20
-dim_y =20
+dim_x = 18
+dim_y = 60
 
 tf = 20  # fire evolution frequency
 w = 1.05  # w is a weight for I in the paper
@@ -541,7 +541,6 @@ def plot():
     fig, ax = plt.subplots()
     ax.set_xlabel('time step')
     ax.set_ylabel('num of people')
-    ax.yaxis.set_ticks(np.arange(0, left[0] + left[0]//10, left[0]//10))
     ax.plot(time, left,
             color='b',
             linewidth=1.0,
@@ -607,20 +606,20 @@ def init():
     ))
 
     # fire_cells = {(4, 4), (4, 5), (5, 4), (5, 5)}
-    rec_fire = Rectangle(int((dim_x - 2) / 2), int((dim_y - 2) / 2)-4, 1, 1)
+    rec_fire = Rectangle(int((dim_x - 2) / 2), int((dim_y - 2) / 2)-5, 1, 1)
     fire_cells = set(rec_fire.all_coordinates())
     update_fire()
     init_walls(exit_cells)
 
     # Assign obstacle
-    # obstacal = Rectangle(10, int(dim_y / 2), 6, 1)
-    # init_obstal(obstacal.all_coordinates())
+    obstacal = Rectangle(10, int(dim_y / 2), 6, 1)
+    init_obstal(obstacal.all_coordinates())
 
     #sff
     init_sff(exit_cells)
     # Assign pedestrains
     rec = Rectangle(1, 1, dim_x - 3, dim_y - 3)
-    generate_pedestrain_rand(50, rec)
+    generate_pedestrain_rand(200, rec)
     # generate_pedestrain(((5, 1)))
     print(sff)
 
