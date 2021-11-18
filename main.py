@@ -154,16 +154,30 @@ def init_dff_diff():
 
 
 def update_dff():
-    global dff, dff_diff
-    dff += dff_diff
+    global dff
+
+    tmp = np.zeros((dim_x, dim_y)) # tmp matrix to store the result of alpha*(1-delta)/4*sum(dff[neighbors])
+    for idx, x in np.ndenumerate(tmp):
+        neighbors = get_neighbors(idx)
+        for cell in neighbors:
+            tmp[idx] += dff[cell]
+
+        tmp[idx] = tmp[idx] * alpha * (1-delta) / 4
+
+    dff = (1-alpha) * (1-delta) * dff + tmp
+    dff = dff/np.sum(dff) # normalize dff
+
+    # dff += dff_diff
+
+    #dff = dff_diff
     # iter through all cells in the grid
-    for i, j in itertools.chain(itertools.product(range(1, dim_x - 1), range(1, dim_y - 1)), exit_cells):
+    '''for i, j in itertools.chain(itertools.product(range(1, dim_x - 1), range(1, dim_y - 1)), exit_cells):
         for _ in range(int(dff[i, j])):
             if np.random.rand() < delta:  # decay
                 dff[i, j] -= 1
             elif np.random.rand() < alpha:  # diffusion
                 dff[i, j] -= 1
-                dff[random.choice(get_neighbors((i, j)))] += 1
+                dff[random.choice(get_neighbors((i, j)))] += 1'''
 
 
 # update fire
@@ -249,7 +263,7 @@ class Pedestrain:
         else:
             visual_field[self.now] = 0
             if self.last != self.now:
-                dff_diff[self.last] += 1
+                dff[self.last] += 1
             self.last = self.now
 
             if random.random() > self.Pc and not self.in_catwalk():  # Pedestrian is panic
