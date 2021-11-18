@@ -341,7 +341,7 @@ class Pedestrain:
             self.update_P()
 
     def update_P(self):  # overall probability
-        self.P = (np.exp(ks * self.get_S()) * np.exp(kd * dff[self.now]) * self.I * (
+        self.P = (np.exp(ks * self.get_S()) * np.exp(kd * self.get_D()) * self.I * (
                 1 - self.n) * self.epsilon) / np.exp(
             kf * self.F)
         sum = np.sum(self.P)
@@ -474,6 +474,10 @@ class Pedestrain:
                 if i + j == 0 or i + j == 2 or i + j == 4:
                     s[i][j] = s[i][j] / sqrt(2)
         return s
+
+
+    def get_D(self):
+        return dff[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
 
 
     def in_catwalk(self):  # decide if pedestrian is in a catwalk, return T, F
