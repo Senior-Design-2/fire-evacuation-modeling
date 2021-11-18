@@ -5,9 +5,10 @@ from math import sqrt
 import numpy
 import numpy as np
 
+frame=500 # total time steps
 file_name = r'.\test4.mp4'
 dim_x = 18
-dim_y = 60
+dim_y = 65
 
 tf = 20  # fire evolution frequency
 w = 1.05  # w is a weight for I in the paper
@@ -47,13 +48,13 @@ def init_obstal(obstal):
 def get_diag_neighbors(cell):
     neighbors = []
     i, j = cell
-    if i >= 1 and j >= 1 and sff[(i - 1, j - 1)] != 99999:
+    if i >= 1 and j >= 1 and sff[(i - 1, j - 1)] != 99999 and sff[(i + 1, j)] != 499:
         neighbors.append((i - 1, j - 1))
-    if i < dim_x - 1 and j < dim_y - 1 and sff[(i + 1, j + 1)] != 99999:
+    if i < dim_x - 1 and j < dim_y - 1 and sff[(i + 1, j + 1)] != 99999 and sff[(i + 1, j)] != 499:
         neighbors.append((i + 1, j + 1))
-    if i < dim_x - 1 and j >= 1 and sff[(i + 1, j - 1)] != 99999:
+    if i < dim_x - 1 and j >= 1 and sff[(i + 1, j - 1)] != 99999 and sff[(i + 1, j)] != 499:
         neighbors.append((i + 1, j - 1))
-    if i >= 1 and j < dim_y - 1 and sff[(i - 1, j + 1)] != 99999:
+    if i >= 1 and j < dim_y - 1 and sff[(i - 1, j + 1)] != 99999 and sff[(i + 1, j)] != 499:
         neighbors.append((i - 1, j + 1))
     return neighbors
 
@@ -86,6 +87,7 @@ def get_neighbors(cell, moore=0, ignore_val=99999):
     return neighbors
 
 
+
 def get_neighbors_including_wall(cell, moore=0):
     # von Neumann neighborhood
     neighbors = []
@@ -113,13 +115,13 @@ def get_neighbors_including_wall(cell, moore=0):
 
 # initial static floor field
 def init_sff(exit_cells):
-    global sff
+    global sff, dim_x, dim_y
     for e in exit_cells:
         e_neighbor = get_neighbors(e)
         for c in e_neighbor:
             if c not in exit_cells:
                 init_sff_rec(c, 1)
-
+    print(sff)
     # sff = np.where(sff==99999,0,1/sff)
 
 
@@ -127,7 +129,7 @@ def init_sff(exit_cells):
 def init_sff_rec(_cell, _value):
     global sff
     sff[_cell] = _value
-    neighbors = get_neighbors(_cell, 0)
+    neighbors = get_neighbors(_cell, moore=0)
     diag_neighbors = get_diag_neighbors(_cell)
     for n in neighbors:
         if n not in exit_cells:
@@ -168,8 +170,10 @@ def update_dff():
 
 # update fire
 def update_fire():
+    global sff
     '''todo: further add more rules'''
     for i in fire_cells:
+        sff[i] = 99999
         visual_field[i] = 499
 
 
@@ -187,8 +191,10 @@ def fire_evolution(t):
             neighbors = get_neighbors(i, 1, 99999)
             for j in neighbors:
                 tmp.add(j)
-    fire_cells = fire_cells.union(tmp)
-    update_fire()
+        fire_cells = fire_cells.union(tmp)
+        update_fire()
+        sff[sff!=99999]=0
+        init_sff(exit_cells)
 
 
 # fire_evolution(20)
@@ -438,6 +444,8 @@ class Pedestrain:
     def update_epsilon(self):  # update obstacle matrix,  epsilon is [] when pedestrian on the border/exit
         temp = visual_field[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
         self.epsilon = np.where(temp == 99999, 0, 1)
+        temp = np.where(temp == 499, 0, 1)
+        self.epsilon[temp==0]=0
         if self.epsilon.size == 0:  # epsilon is [] when pedestrian on the border/exit
             self.epsilon = numpy.zeros((3, 3))
 
@@ -472,12 +480,9 @@ class Pedestrain:
         return d
 
     def in_catwalk(self):  # decide if pedestrian is in a catwalk, return T, F
-        wall = self.epsilon
-        fire = [self.F > 1]
-        wall = [wall == 0]
-        result = np.logical_or(fire, wall)
-        count = (result == False).sum()
-        print(result)
+        obstacle = self.epsilon
+        count = (obstacle == 1).sum()
+        print(obstacle)
         if count <= 4:
             return True
         return False
@@ -588,7 +593,7 @@ def animate():
     img = ax.imshow(visual_field, cmap=Cmap, interpolation='nearest', norm=boundary_norm)
 
     ani = animation.FuncAnimation(fig, Update, fargs=(img, ax,), init_func=init,
-                                  frames=500,
+                                  frames=frame,
                                   interval=200,
                                   repeat=False)
     f = file_name
@@ -621,7 +626,6 @@ def init():
     rec = Rectangle(1, 1, dim_x - 3, dim_y - 3)
     generate_pedestrain_rand(200, rec)
     # generate_pedestrain(((5, 1)))
-    print(sff)
 
 
 def one_step(time):
@@ -640,8 +644,8 @@ def one_step(time):
             i.step("max")
             print(temp)
             print(visual_field)
-    update_dff()
-    init_dff_diff()
+    # update_dff()
+    # init_dff_diff()
 
 
 def test():
