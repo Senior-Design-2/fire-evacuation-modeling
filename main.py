@@ -1,11 +1,10 @@
 import itertools
 import math
-from math import sqrt
-
 import numpy
 import numpy as np
+from math import sqrt
 
-frame=500 # total time steps
+frame = 500  # total time steps
 file_name = r'.\test4.mp4'
 dim_x = 18
 dim_y = 65
@@ -87,7 +86,6 @@ def get_neighbors(cell, moore=0, ignore_val=99999):
     return neighbors
 
 
-
 def get_neighbors_including_wall(cell, moore=0):
     # von Neumann neighborhood
     neighbors = []
@@ -156,9 +154,19 @@ def init_dff_diff():
 
 
 def update_dff():
-    global dff, dff_diff
-    dff += dff_diff
-    # iter through all cells in the grid
+    global dff
+
+    tmp = np.zeros((dim_x, dim_y))  # tmp matrix to store the result of alpha*(1-delta)/4*sum(dff[neighbors])
+    for idx, x in np.ndenumerate(tmp):
+        neighbors = get_neighbors(idx)
+        for cell in neighbors:
+            tmp[idx] += dff[cell]
+
+        tmp[idx] = tmp[idx] * alpha * (1 - delta) / 4
+
+    dff = (1 - alpha) * (1 - delta) * dff + tmp
+    dff = dff / np.sum(dff)  # normalize dff
+
     for i, j in itertools.chain(itertools.product(range(1, dim_x - 1), range(1, dim_y - 1)), exit_cells):
         for _ in range(int(dff[i, j])):
             if np.random.rand() < delta:  # decay
@@ -193,7 +201,7 @@ def fire_evolution(t):
                 tmp.add(j)
         fire_cells = fire_cells.union(tmp)
         update_fire()
-        sff[sff!=99999]=0
+        sff[sff != 99999] = 0
         init_sff(exit_cells)
 
 
@@ -255,7 +263,7 @@ class Pedestrain:
         else:
             visual_field[self.now] = 0
             if self.last != self.now:
-                dff_diff[self.last] += 1
+                dff[self.last] += 1
             self.last = self.now
 
             if random.random() > self.Pc and not self.in_catwalk():  # Pedestrian is panic
@@ -445,7 +453,7 @@ class Pedestrain:
         temp = visual_field[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
         self.epsilon = np.where(temp == 99999, 0, 1)
         temp = np.where(temp == 499, 0, 1)
-        self.epsilon[temp==0]=0
+        self.epsilon[temp == 0] = 0
         if self.epsilon.size == 0:  # epsilon is [] when pedestrian on the border/exit
             self.epsilon = numpy.zeros((3, 3))
 
@@ -567,7 +575,7 @@ def plot():
             label="people panic"
             )
     ax.legend()
-    plt.savefig(file_name[:-3]+"png")
+    plt.savefig(file_name[:-3] + "png")
 
 
 # Animation
@@ -611,7 +619,7 @@ def init():
     ))
 
     # fire_cells = {(4, 4), (4, 5), (5, 4), (5, 5)}
-    rec_fire = Rectangle(int((dim_x - 2) / 2), int((dim_y - 2) / 2)-5, 1, 1)
+    rec_fire = Rectangle(int((dim_x - 2) / 2), int((dim_y - 2) / 2) - 5, 1, 1)
     fire_cells = set(rec_fire.all_coordinates())
     update_fire()
     init_walls(exit_cells)
@@ -620,7 +628,7 @@ def init():
     obstacal = Rectangle(10, int(dim_y / 2), 6, 1)
     init_obstal(obstacal.all_coordinates())
 
-    #sff
+    # sff
     init_sff(exit_cells)
     # Assign pedestrains
     rec = Rectangle(1, 1, dim_x - 3, dim_y - 3)
