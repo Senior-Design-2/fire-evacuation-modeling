@@ -1,13 +1,13 @@
 import itertools
 import math
-from math import sqrt
-
 import numpy
 import numpy as np
+from math import sqrt
 
+frame = 500  # total time steps
 file_name = r'.\test4.mp4'
 dim_x = 18
-dim_y = 60
+dim_y = 65
 
 tf = 20  # fire evolution frequency
 w = 1.05  # w is a weight for I in the paper
@@ -45,13 +45,13 @@ def init_obstal(obstal):
 def get_diag_neighbors(cell):
     neighbors = []
     i, j = cell
-    if i >= 1 and j >= 1 and sff[(i - 1, j - 1)] != 99999:
+    if i >= 1 and j >= 1 and sff[(i - 1, j - 1)] != 99999 and sff[(i + 1, j)] != 499:
         neighbors.append((i - 1, j - 1))
-    if i < dim_x - 1 and j < dim_y - 1 and sff[(i + 1, j + 1)] != 99999:
+    if i < dim_x - 1 and j < dim_y - 1 and sff[(i + 1, j + 1)] != 99999 and sff[(i + 1, j)] != 499:
         neighbors.append((i + 1, j + 1))
-    if i < dim_x - 1 and j >= 1 and sff[(i + 1, j - 1)] != 99999:
+    if i < dim_x - 1 and j >= 1 and sff[(i + 1, j - 1)] != 99999 and sff[(i + 1, j)] != 499:
         neighbors.append((i + 1, j - 1))
-    if i >= 1 and j < dim_y - 1 and sff[(i - 1, j + 1)] != 99999:
+    if i >= 1 and j < dim_y - 1 and sff[(i - 1, j + 1)] != 99999 and sff[(i + 1, j)] != 499:
         neighbors.append((i - 1, j + 1))
     return neighbors
 
@@ -111,13 +111,13 @@ def get_neighbors_including_wall(cell, moore=0):
 
 # initial static floor field
 def init_sff(exit_cells):
-    global sff
+    global sff, dim_x, dim_y
     for e in exit_cells:
         e_neighbor = get_neighbors(e)
         for c in e_neighbor:
             if c not in exit_cells:
                 init_sff_rec(c, 1)
-
+    print(sff)
     # sff = np.where(sff==99999,0,1/sff)
 
 
@@ -125,7 +125,7 @@ def init_sff(exit_cells):
 def init_sff_rec(_cell, _value):
     global sff
     sff[_cell] = _value
-    neighbors = get_neighbors(_cell, 0)
+    neighbors = get_neighbors(_cell, moore=0)
     diag_neighbors = get_diag_neighbors(_cell)
     for n in neighbors:
         if n not in exit_cells:
@@ -154,34 +154,25 @@ def init_dff_diff():
 def update_dff():
     global dff
 
-    tmp = np.zeros((dim_x, dim_y)) # tmp matrix to store the result of alpha*(1-delta)/4*sum(dff[neighbors])
+    tmp = np.zeros((dim_x, dim_y))  # tmp matrix to store the result of alpha*(1-delta)/4*sum(dff[neighbors])
     for idx, x in np.ndenumerate(tmp):
         neighbors = get_neighbors(idx)
         for cell in neighbors:
             tmp[idx] += dff[cell]
 
-        tmp[idx] = tmp[idx] * alpha * (1-delta) / 4
+        tmp[idx] = tmp[idx] * alpha * (1 - delta) / 4
 
-    dff = (1-alpha) * (1-delta) * dff + tmp
-    dff = dff/np.sum(dff) # normalize dff
+    dff = (1 - alpha) * (1 - delta) * dff + tmp
+    dff = dff / np.sum(dff)  # normalize dff
 
-    # dff += dff_diff
-
-    #dff = dff_diff
-    # iter through all cells in the grid
-    '''for i, j in itertools.chain(itertools.product(range(1, dim_x - 1), range(1, dim_y - 1)), exit_cells):
-        for _ in range(int(dff[i, j])):
-            if np.random.rand() < delta:  # decay
-                dff[i, j] -= 1
-            elif np.random.rand() < alpha:  # diffusion
-                dff[i, j] -= 1
-                dff[random.choice(get_neighbors((i, j)))] += 1'''
 
 
 # update fire
 def update_fire():
+    global sff
     '''todo: further add more rules'''
     for i in fire_cells:
+        sff[i] = 99999
         visual_field[i] = 499
 
 
@@ -199,8 +190,10 @@ def fire_evolution(t):
             neighbors = get_neighbors(i, 1, 99999)
             for j in neighbors:
                 tmp.add(j)
-    fire_cells = fire_cells.union(tmp)
-    update_fire()
+        fire_cells = fire_cells.union(tmp)
+        update_fire()
+        sff[sff != 99999] = 0
+        init_sff(exit_cells)
 
 
 # fire_evolution(20)
@@ -451,6 +444,8 @@ class Pedestrain:
     def update_epsilon(self):  # update obstacle matrix,  epsilon is [] when pedestrian on the border/exit
         temp = visual_field[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
         self.epsilon = np.where(temp == 99999, 0, 1)
+        temp = np.where(temp == 499, 0, 1)
+        self.epsilon[temp == 0] = 0
         if self.epsilon.size == 0:  # epsilon is [] when pedestrian on the border/exit
             self.epsilon = numpy.zeros((3, 3))
 
@@ -482,12 +477,9 @@ class Pedestrain:
 
 
     def in_catwalk(self):  # decide if pedestrian is in a catwalk, return T, F
-        wall = self.epsilon
-        fire = [self.F > 1]
-        wall = [wall == 0]
-        result = np.logical_or(fire, wall)
-        count = (result == False).sum()
-        print(result)
+        obstacle = self.epsilon
+        count = (obstacle == 1).sum()
+        print(obstacle)
         if count <= 4:
             return True
         return False
@@ -572,7 +564,7 @@ def plot():
             label="people panic"
             )
     ax.legend()
-    plt.savefig(file_name[:-3]+"png")
+    plt.savefig(file_name[:-3] + "png")
 
 
 # Animation
@@ -598,7 +590,7 @@ def animate():
     img = ax.imshow(visual_field, cmap=Cmap, interpolation='nearest', norm=boundary_norm)
 
     ani = animation.FuncAnimation(fig, Update, fargs=(img, ax,), init_func=init,
-                                  frames=500,
+                                  frames=frame,
                                   interval=200,
                                   repeat=False)
     f = file_name
@@ -616,7 +608,7 @@ def init():
     ))
 
     # fire_cells = {(4, 4), (4, 5), (5, 4), (5, 5)}
-    rec_fire = Rectangle(int((dim_x - 2) / 2), int((dim_y - 2) / 2)-5, 1, 1)
+    rec_fire = Rectangle(int((dim_x - 2) / 2), int((dim_y - 2) / 2) - 5, 1, 1)
     fire_cells = set(rec_fire.all_coordinates())
     update_fire()
     init_walls(exit_cells)
@@ -625,7 +617,7 @@ def init():
     obstacal = Rectangle(10, int(dim_y / 2), 6, 1)
     init_obstal(obstacal.all_coordinates())
 
-    #sff
+    # sff
     init_sff(exit_cells)
     # Assign pedestrains
     rec = Rectangle(1, 1, dim_x - 3, dim_y - 3)
@@ -651,6 +643,7 @@ def one_step(time):
             i.step("max")
             print(temp)
             print(visual_field)
+
     update_dff()
     print("D: \n", dff)
 
