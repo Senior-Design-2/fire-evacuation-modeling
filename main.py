@@ -12,7 +12,7 @@ dim_y = 60
 tf = 20  # fire evolution frequency
 w = 1.05  # w is a weight for I in the paper
 ks = 0.5
-kd = 0.2
+kd = 10
 kf = 0.3
 alpha = 0.2  # coeffision for diffusion
 delta = 0.2  # coeefision for decay
@@ -23,8 +23,6 @@ pedestrains = []
 visual_field = np.zeros((dim_x, dim_y))
 sff = np.zeros((dim_x, dim_y))
 dff = np.zeros((dim_x, dim_y))  # dynamic floor field
-dff_diff = np.zeros(
-    (dim_x, dim_y))  # dff difference matrix, update current grid then add to dff through update_dff function
 
 
 # initialize walls to be 99999
@@ -262,8 +260,6 @@ class Pedestrain:
             visual_field[self.now] = 1000
         else:
             visual_field[self.now] = 0
-            if self.last != self.now:
-                dff[self.last] += 1
             self.last = self.now
 
             if random.random() > self.Pc and not self.in_catwalk():  # Pedestrian is panic
@@ -297,7 +293,7 @@ class Pedestrain:
                 print("\n S:\n", self.get_S(), "\n I:\n", self.I, "\n n:\n",
                       self.n,
                       "\n epsilon:\n", self.epsilon,
-                      "\n F:\n", self.F, "\n D:\n", self.get_D(), "\n P: \n", self.P)
+                      "\n F:\n", self.F, "\n D:\n", dff, "\n P: \n", self.P)
                 if decision == "probability":
                     index = np.random.choice(9, p=self.P.flatten())
                     indexes = [i for i, x in np.ndenumerate(self.P)]
@@ -338,6 +334,9 @@ class Pedestrain:
                     visual_field[self.now] = 999
                     print(self.now)
 
+        if self.last != self.now:
+            dff[self.last] += 1
+
     def update(self):
         if self.now not in exit_cells and self.now not in fire_cells:
             self.update_I()
@@ -349,7 +348,7 @@ class Pedestrain:
             self.update_P()
 
     def update_P(self):  # overall probability
-        self.P = (np.exp(ks * self.get_S()) * np.exp(kd * 1) * self.I * (
+        self.P = (np.exp(ks * self.get_S()) * np.exp(kd * dff[self.now]) * self.I * (
                 1 - self.n) * self.epsilon) / np.exp(
             kf * self.F)
         sum = np.sum(self.P)
@@ -481,9 +480,6 @@ class Pedestrain:
                     s[i][j] = s[i][j] / sqrt(2)
         return s
 
-    def get_D(self):
-        d = dff[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
-        return d
 
     def in_catwalk(self):  # decide if pedestrian is in a catwalk, return T, F
         wall = self.epsilon
@@ -636,6 +632,7 @@ def init():
     generate_pedestrain_rand(200, rec)
     # generate_pedestrain(((5, 1)))
     print(sff)
+    print(dff)
 
 
 def one_step(time):
@@ -655,7 +652,7 @@ def one_step(time):
             print(temp)
             print(visual_field)
     update_dff()
-    init_dff_diff()
+    print("D: \n", dff)
 
 
 def test():
