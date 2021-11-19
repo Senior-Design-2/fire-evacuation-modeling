@@ -1,20 +1,23 @@
 import itertools
 import math
+import random
 from math import sqrt
 
-import numpy
+import matplotlib.animation as animation
+import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.colors import ListedColormap, BoundaryNorm
 
-frame=600 # total time steps
-file_name = r'.\test4.mp4'
+frame = 1000  # total time steps
+file_name = r'.\test.mp4'
 dim_x = 18
-dim_y = 65
+dim_y = 60
 
-tf = 20  # fire evolution frequency
+tf = 30  # fire evolution frequency
 w = 1.05  # w is a weight for I in the paper
 ks = 0.5
-kd = 10
-kf = 0.3
+kd = 0.2
+kf = 0.7 # 0.7 is appropriate after my test
 alpha = 0.2  # coeffision for diffusion
 delta = 0.2  # coeefision for decay
 myLambda = 0.5  # 0.5 # Sedation probability increase coefficient, ps: lambda increase sedation probability increase
@@ -83,7 +86,6 @@ def get_neighbors(cell, moore=0, ignore_val=99999):
         if i >= 1 and j < dim_y - 1 and sff[(i - 1, j + 1)] != ignore_val:
             neighbors.append((i - 1, j + 1))
     return neighbors
-
 
 
 def get_neighbors_including_wall(cell, moore=0):
@@ -156,16 +158,17 @@ def init_dff_diff():
 def update_dff():
     global dff
 
-    tmp = np.zeros((dim_x, dim_y)) # tmp matrix to store the result of alpha*(1-delta)/4*sum(dff[neighbors])
+    tmp = np.zeros((dim_x, dim_y))  # tmp matrix to store the result of alpha*(1-delta)/4*sum(dff[neighbors])
     for idx, x in np.ndenumerate(tmp):
         neighbors = get_neighbors(idx)
         for cell in neighbors:
             tmp[idx] += dff[cell]
 
-        tmp[idx] = tmp[idx] * alpha * (1-delta) / 4
+        tmp[idx] = tmp[idx] * alpha * (1 - delta) / 4
 
-    dff = (1-alpha) * (1-delta) * dff + tmp
-    dff = dff/np.sum(dff) # normalize dff
+    dff = (1 - alpha) * (1 - delta) * dff + tmp
+    dff = dff / np.sum(dff)  # normalize dff
+
 
 # update fire
 def update_fire():
@@ -192,7 +195,7 @@ def fire_evolution(t):
                 tmp.add(j)
         fire_cells = fire_cells.union(tmp)
         update_fire()
-        sff[sff!=99999]=0
+        sff[sff != 99999] = 0
         init_sff(exit_cells)
 
 
@@ -286,7 +289,7 @@ class Pedestrain:
                 print("\n S:\n", self.get_S(), "\n I:\n", self.I, "\n n:\n",
                       self.n,
                       "\n epsilon:\n", self.epsilon,
-                      "\n F:\n", self.F, "\n D:\n", dff, "\n P: \n", self.P)
+                      "\n F:\n", self.F, "\n D:\n", self.get_D(), "\n P: \n", self.P)
                 if decision == "probability":
                     index = np.random.choice(9, p=self.P.flatten())
                     indexes = [i for i, x in np.ndenumerate(self.P)]
@@ -341,7 +344,7 @@ class Pedestrain:
             self.update_P()
 
     def update_P(self):  # overall probability
-        self.P = (np.exp(ks * self.get_S()) * np.exp(kd * dff[self.now]) * self.I * (
+        self.P = (np.exp(ks * self.get_S()) * np.exp(kd * self.get_D()) * self.I * (
                 1 - self.n) * self.epsilon) / np.exp(
             kf * self.F)
         sum = np.sum(self.P)
@@ -370,7 +373,7 @@ class Pedestrain:
         self.I[(dir[0] + 1, dir[1] + 1)] = w
         neighbors = self.neighbors((dir[0] + 1, dir[1] + 1))
         for i in neighbors:  # compute the component of inertia on the same direction
-            self.I[i] = 1 + 0.8509 * (w - 1)  # sin45 = 0.8509
+            self.I[i] = 1 + 0.70711 * (w - 1)  # sin45 = 0.8509
 
     def neighbors(self, coord):
         neighbors = []
@@ -388,14 +391,9 @@ class Pedestrain:
         neighbors.append(self.now)
         for i in neighbors:
             self.F[i[0] - x, i[1] - y] = self.compute_H(i)
-        print("F: ", self.F)
         s = sff[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
         cof1 = np.where(self.F > gamma, 0, 1)  # rule 1 coffession
-        print("cof1", cof1)
-
         cof2 = np.where(s < 6, 0.5, 1)  # rule 2 coffession
-        print("cof2", cof2)
-
         mask = np.nonzero(self.F)
         self.F[mask] = 1 / self.F[mask]
         self.F[self.F == 0] = 1000  # Fire field overlap with fire cells, to avoid 1/0 error ,set it to 0.01
@@ -445,9 +443,9 @@ class Pedestrain:
         temp = visual_field[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
         self.epsilon = np.where(temp == 99999, 0, 1)
         temp = np.where(temp == 499, 0, 1)
-        self.epsilon[temp==0]=0
-        if self.epsilon.size == 0:  # epsilon is [] when pedestrian on the border/exit
-            self.epsilon = numpy.zeros((3, 3))
+        self.epsilon[temp == 0] = 0
+        # if self.epsilon.size == 0:  # epsilon is [] when pedestrian on the border/exit
+        #     self.epsilon = numpy.zeros((3, 3))
 
     def get_epsilon(self):
         return self.epsilon
@@ -475,6 +473,8 @@ class Pedestrain:
                     s[i][j] = s[i][j] / sqrt(2)
         return s
 
+    def get_D(self):
+        return dff[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
 
     def in_catwalk(self):  # decide if pedestrian is in a catwalk, return T, F
         obstacle = self.epsilon
@@ -486,6 +486,7 @@ class Pedestrain:
 
 
 def generate_pedestrain_rand(num, rectangle):
+    random.seed(3)
     pedestrain_cells = random.sample(rectangle.all_coordinates(), num)
     for i in pedestrain_cells:
         if visual_field[i] == 0:
@@ -504,11 +505,6 @@ def generate_pedestrain(x):  # x is a tuple|Rectangle
             raise Exception("Wall cells included")
         pedestrains.append(Pedestrain(x))
 
-
-import random
-import matplotlib.pyplot as plt
-from matplotlib.colors import ListedColormap, BoundaryNorm
-import matplotlib.animation as animation
 
 # Statistic variable
 time = []
@@ -564,7 +560,7 @@ def plot():
             label="people panic"
             )
     ax.legend()
-    plt.savefig(file_name[:-3]+"png")
+    plt.savefig(file_name[:-3] + "png")
 
 
 # Animation
@@ -608,7 +604,7 @@ def init():
     ))
 
     # fire_cells = {(4, 4), (4, 5), (5, 4), (5, 5)}
-    rec_fire = Rectangle(int((dim_x - 2) / 2), int((dim_y - 2) / 2)-5, 1, 1)
+    rec_fire = Rectangle(int((dim_x - 2) / 2), int((dim_y - 2) / 2)-4, 1, 1)
     fire_cells = set(rec_fire.all_coordinates())
     update_fire()
     init_walls(exit_cells)
@@ -617,7 +613,7 @@ def init():
     obstacal = Rectangle(10, int(dim_y / 2), 6, 1)
     init_obstal(obstacal.all_coordinates())
 
-    #sff
+    # sff
     init_sff(exit_cells)
     # Assign pedestrains
     rec = Rectangle(1, 1, dim_x - 3, dim_y - 3)
@@ -657,12 +653,3 @@ def test():
 animate()
 plot()
 # test()
-# exit_cells = frozenset((
-#         (dim_x // 2 - 1, dim_y - 1), (dim_x // 2, dim_y - 1),
-#         # (dim_x - 1, dim_y // 2), (dim_x - 1, dim_y // 2 - 1),
-#         # (0, dim_y // 2 - 1), (0, dim_y // 2),
-#         # (dim_x // 2 - 1, 0), (dim_x // 2, 0),
-#     ))
-# init_walls(exit_cells)
-# init_sff(exit_cells)
-# print(1)
