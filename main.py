@@ -8,26 +8,27 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import ListedColormap, BoundaryNorm
 
-frame = 1000  # total time steps
+frame = 500  # total time steps
 file_name = r'.\test.mp4'
 dim_x = 18
 dim_y = 60
 
-tf = 30  # fire evolution frequency
+tf = 20  # fire evolution frequency
 w = 1.05  # w is a weight for I in the paper
-ks = 0.5
-kd = 0.2
-kf = 0.7 # 0.7 is appropriate after my test
+ks = 100
+kd = 10
+kf = 600 # 0.7 is appropriate after my test
 alpha = 0.2  # coeffision for diffusion
 delta = 0.2  # coeefision for decay
-myLambda = 0.5  # 0.5 # Sedation probability increase coefficient, ps: lambda increase sedation probability increase
+myLambda = 100  # 0.5 # Sedation probability increase coefficient, ps: lambda increase sedation probability increase
 gamma = 30  # If distance to fire border is larger than γ , Fij = 0,
 
 pedestrains = []
 visual_field = np.zeros((dim_x, dim_y))
-sff = np.zeros((dim_x, dim_y))
-dff = np.zeros((dim_x, dim_y))  # dynamic floor field
-
+sff = np.zeros((dim_x, dim_y),dtype=np.longdouble)
+sff_distance = np.zeros((dim_x, dim_y))
+dff = np.zeros((dim_x, dim_y),dtype=np.longdouble)  # dynamic floor field
+fff = np.ones((dim_x, dim_y),dtype=np.longdouble)
 
 # initialize walls to be 99999
 def init_walls(exit_cells):
@@ -115,14 +116,20 @@ def get_neighbors_including_wall(cell, moore=0):
 
 # initial static floor field
 def init_sff(exit_cells):
-    global sff, dim_x, dim_y
+    global sff, dim_x, dim_y, sff_distance
     for e in exit_cells:
         e_neighbor = get_neighbors(e)
         for c in e_neighbor:
             if c not in exit_cells:
                 init_sff_rec(c, 1)
+    sff_distance = np.copy(sff)
+    sff[sff==99999] = 0 # set wall cell to 0
+    sff[sff!=0]=1/sff[sff!=0]
+    sum = np.sum(sff)
+    sff = sff/sum
+    for e in exit_cells:
+        sff[e] = 1
     print(sff)
-    # sff = np.where(sff==99999,0,1/sff)
 
 
 # a recursive function to initialize static floor field
@@ -170,6 +177,30 @@ def update_dff():
     dff = dff / np.sum(dff)  # normalize dff
 
 
+def compute_H(coord):
+    temp = 999999
+    for i in fire_cells:
+        euclidean_distance = np.linalg.norm(np.asarray(coord) - np.asarray(i))
+        if temp > euclidean_distance:
+            temp = euclidean_distance
+    return temp
+
+def update_fff(): # after update of sff
+    global fff
+    fff[visual_field==99999]=0
+    fff[visual_field==499]=0
+    for i, x in np.ndenumerate(fff):
+        if x!=0:
+            distance=compute_H(i)
+            if distance > gamma:
+                fff[i]=0
+            else:
+                fff[i] = distance
+    fff[fff!=0]= 1/fff[fff!=0]
+    sum = np.sum(fff)
+    fff = fff/sum
+    fff[sff_distance<6] = fff[sff_distance<6]*0.5
+
 # update fire
 def update_fire():
     global sff
@@ -181,7 +212,7 @@ def update_fire():
 
 # fire evolution by tf
 def fire_evolution(t):
-    global rf, tf, fire_cells
+    global rf, tf, fire_cells, sff
 
     if t == 0:
         update_fire()
@@ -190,13 +221,15 @@ def fire_evolution(t):
     tmp = set()
     if t % tf == 0:
         for i in fire_cells:
-            neighbors = get_neighbors(i, 1, 99999)
+            neighbors = get_neighbors(i, 1, 0)
             for j in neighbors:
                 tmp.add(j)
         fire_cells = fire_cells.union(tmp)
+        sff = np.zeros((dim_x,dim_y))
+        init_walls(exit_cells)
         update_fire()
-        sff[sff != 99999] = 0
         init_sff(exit_cells)
+        update_fff()
 
 
 # fire_evolution(20)
@@ -259,7 +292,7 @@ class Pedestrain:
             self.last = self.now
 
             if random.random() > self.Pc and not self.in_catwalk():  # Pedestrian is panic
-                print("Pc:", self.Pc, self.F)
+                print("Pc:", self.Pc, self.get_F())
                 neighors = get_neighbors_including_wall(self.now, 1)
                 dic = {}
                 for i in neighors:
@@ -289,7 +322,9 @@ class Pedestrain:
                 print("\n S:\n", self.get_S(), "\n I:\n", self.I, "\n n:\n",
                       self.n,
                       "\n epsilon:\n", self.epsilon,
-                      "\n F:\n", self.F, "\n D:\n", self.get_D(), "\n P: \n", self.P)
+                      "\n F:\n", self.get_F(), "\n D:\n", self.get_D(), "\n P: \n", self.P,"\n ", (np.exp(ks * self.get_S()) * np.exp(kd * self.get_D()) * self.I * (
+                1 - self.n) * self.epsilon), "\n ",np.exp(
+            kf * self.get_F()) )
                 if decision == "probability":
                     index = np.random.choice(9, p=self.P.flatten())
                     indexes = [i for i, x in np.ndenumerate(self.P)]
@@ -336,7 +371,6 @@ class Pedestrain:
     def update(self):
         if self.now not in exit_cells and self.now not in fire_cells:
             self.update_I()
-            self.update_F()
             self.update_epsilon()
             self.update_n()
             self.update_H()
@@ -344,9 +378,9 @@ class Pedestrain:
             self.update_P()
 
     def update_P(self):  # overall probability
-        self.P = (np.exp(ks * self.get_S()) * np.exp(kd * self.get_D()) * self.I * (
+        self.P = (np.exp(ks * self.get_S()) * np.exp(kd * 1) * self.I * (
                 1 - self.n) * self.epsilon) / np.exp(
-            kf * self.F)
+            kf * self.get_F())
         sum = np.sum(self.P)
         self.P = self.P / sum
 
@@ -383,31 +417,30 @@ class Pedestrain:
                 neighbors.append(i)
         return neighbors
 
-    def update_F(self):  # fire floor field, 0 means out of range
-        self.F = np.zeros((3, 3))
-        neighbors = get_neighbors_including_wall(self.now, 1)
-        x = self.x - 1
-        y = self.y - 1
-        neighbors.append(self.now)
-        for i in neighbors:
-            self.F[i[0] - x, i[1] - y] = self.compute_H(i)
-        s = sff[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
-        cof1 = np.where(self.F > gamma, 0, 1)  # rule 1 coffession
-        cof2 = np.where(s < 6, 0.5, 1)  # rule 2 coffession
-        mask = np.nonzero(self.F)
-        self.F[mask] = 1 / self.F[mask]
-        self.F[self.F == 0] = 1000  # Fire field overlap with fire cells, to avoid 1/0 error ,set it to 0.01
-        self.F = self.F * cof1
-        sum = 0
-        for i in self.F.flatten():
-            if i != 1000:
-                sum += i
-        if sum != 0:
-            self.F = np.where(self.F != 1000, self.F / sum, 1000)
-        self.F = self.F * cof2
-
-    def get_F(self):
-        return self.F
+    def get_F(self):  # fire floor field, 0 means out of range
+        f = fff[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
+        return f
+        # self.F = np.zeros((3, 3))
+        # neighbors = get_neighbors_including_wall(self.now, 1)
+        # x = self.x - 1
+        # y = self.y - 1
+        # neighbors.append(self.now)
+        # for i in neighbors:
+        #     self.F[i[0] - x, i[1] - y] = self.compute_H(i)
+        # s = sff[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
+        # cof1 = np.where(self.F > gamma, 0, 1)  # rule 1 coffession
+        # cof2 = np.where(s < 6, 0.5, 1)  # rule 2 coffession
+        # mask = np.nonzero(self.F)
+        # self.F[mask] = 1 / self.F[mask]
+        # self.F[self.F == 0] = 1000  # Fire field overlap with fire cells, to avoid 1/0 error ,set it to 0.01
+        # self.F = self.F * cof1
+        # sum = 0
+        # for i in self.F.flatten():
+        #     if i != 1000:
+        #         sum += i
+        # if sum != 0:
+        #     self.F = np.where(self.F != 1000, self.F / sum, 1000)
+        # self.F = self.F * cof2
 
     def compute_H(self, coord):
         temp = 999999
@@ -465,13 +498,13 @@ class Pedestrain:
 
     def get_S(self):
         s = sff[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
-        print(s)
-        s = s[1, 1] - s
-        for i in range(3):
-            for j in range(3):
-                if i + j == 0 or i + j == 2 or i + j == 4:
-                    s[i][j] = s[i][j] / sqrt(2)
         return s
+        # s = s[1, 1] - s
+        # for i in range(3):
+        #     for j in range(3):
+        #         if i + j == 0 or i + j == 2 or i + j == 4:
+        #             s[i][j] = s[i][j] / sqrt(2)
+
 
     def get_D(self):
         return dff[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
@@ -479,7 +512,6 @@ class Pedestrain:
     def in_catwalk(self):  # decide if pedestrian is in a catwalk, return T, F
         obstacle = self.epsilon
         count = (obstacle == 1).sum()
-        print(obstacle)
         if count <= 4:
             return True
         return False
@@ -598,13 +630,13 @@ def init():
     # define exits
     exit_cells = frozenset((
         (dim_x // 2 - 1, dim_y - 1), (dim_x // 2, dim_y - 1),
-        # (dim_x - 1, dim_y // 2), (dim_x - 1, dim_y // 2 - 1),
-        # (0, dim_y // 2 - 1), (0, dim_y // 2),
-        # (dim_x // 2 - 1, 0), (dim_x // 2, 0),
+        (dim_x - 1, dim_y // 2), (dim_x - 1, dim_y // 2 - 1),
+        (0, dim_y // 2 - 1), (0, dim_y // 2),
+        (dim_x // 2 - 1, 0), (dim_x // 2, 0),
     ))
 
     # fire_cells = {(4, 4), (4, 5), (5, 4), (5, 5)}
-    rec_fire = Rectangle(int((dim_x - 2) / 2), int((dim_y - 2) / 2)-4, 1, 1)
+    rec_fire = Rectangle(int((dim_x - 2) / 2), int((dim_y - 2) / 2)-5, 1, 1)
     fire_cells = set(rec_fire.all_coordinates())
     update_fire()
     init_walls(exit_cells)
@@ -615,10 +647,14 @@ def init():
 
     # sff
     init_sff(exit_cells)
+
+    #fff
+    update_fff()
+
     # Assign pedestrains
     rec = Rectangle(1, 1, dim_x - 3, dim_y - 3)
-    generate_pedestrain_rand(250, rec)
-    # generate_pedestrain(((5, 1)))
+    generate_pedestrain_rand(200, rec)
+    # generate_pedestrain(((int((dim_x - 2) / 2),  int((dim_y - 2) / 2)-5-2)))
     print(sff)
     print(dff)
 
