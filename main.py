@@ -10,10 +10,10 @@ from matplotlib.colors import ListedColormap, BoundaryNorm
 
 frame = 1000  # total time steps
 file_name = r'.\test.mp4'
-dim_x = 18
-dim_y = 60
+dim_x = 30
+dim_y = 30
 
-tf = 30  # fire evolution frequency
+tf = 10  # fire evolution frequency
 w = 1.05  # w is a weight for I in the paper
 ks = 0.5
 kd = 0.2
@@ -49,13 +49,13 @@ def init_obstal(obstal):
 def get_diag_neighbors(cell):
     neighbors = []
     i, j = cell
-    if i >= 1 and j >= 1 and sff[(i - 1, j - 1)] != 99999 and sff[(i + 1, j)] != 499:
+    if i >= 1 and j >= 1 and sff[(i - 1, j - 1)] != 99999:
         neighbors.append((i - 1, j - 1))
-    if i < dim_x - 1 and j < dim_y - 1 and sff[(i + 1, j + 1)] != 99999 and sff[(i + 1, j)] != 499:
+    if i < dim_x - 1 and j < dim_y - 1 and sff[(i + 1, j + 1)] != 99999:
         neighbors.append((i + 1, j + 1))
-    if i < dim_x - 1 and j >= 1 and sff[(i + 1, j - 1)] != 99999 and sff[(i + 1, j)] != 499:
+    if i < dim_x - 1 and j >= 1 and sff[(i + 1, j - 1)] != 99999:
         neighbors.append((i + 1, j - 1))
-    if i >= 1 and j < dim_y - 1 and sff[(i - 1, j + 1)] != 99999 and sff[(i + 1, j)] != 499:
+    if i >= 1 and j < dim_y - 1 and sff[(i - 1, j + 1)] != 99999:
         neighbors.append((i - 1, j + 1))
     return neighbors
 
@@ -483,7 +483,8 @@ class Pedestrain:
         if np.sum(d) == 0:
             return d
         else:
-            return d / np.sum(d)  # normalize dff
+            d = d/np.sum(d)
+            return d  # normalize dff
 
     def in_catwalk(self):  # decide if pedestrian is in a catwalk, return T, F
         obstacle = self.epsilon
@@ -607,7 +608,7 @@ def init():
     # define exits
     exit_cells = frozenset((
         (dim_x // 2 - 1, dim_y - 1), (dim_x // 2, dim_y - 1),
-         #(dim_x - 1, dim_y // 2), (dim_x - 1, dim_y // 2 - 1),
+         (dim_x - 1, dim_y // 2), (dim_x - 1, dim_y // 2 - 1),
          (0, dim_y // 2 - 1), (0, dim_y // 2),
          (dim_x // 2 - 1, 0), (dim_x // 2, 0),
     ))
@@ -626,7 +627,7 @@ def init():
     init_sff(exit_cells)
     # Assign pedestrains
     rec = Rectangle(1, 1, dim_x - 3, dim_y - 3)
-    generate_pedestrain_rand(250, rec)
+    generate_pedestrain_rand(10, rec)
     # generate_pedestrain(((5, 1)))
     print(sff)
     print(dff)
