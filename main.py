@@ -121,6 +121,11 @@ def init_sff(exit_cells):
         for c in e_neighbor:
             if c not in exit_cells:
                 init_sff_rec(c, 1)
+
+        e_neighbor = get_diag_neighbors(e)
+        for c in e_neighbor:
+            if sff[c] > sqrt(2):
+                init_sff_rec(c, sqrt(2))
     print(sff)
     # sff = np.where(sff==99999,0,1/sff)
 
@@ -167,7 +172,7 @@ def update_dff():
         tmp[idx] = tmp[idx] * alpha * (1 - delta) / 4
 
     dff = (1 - alpha) * (1 - delta) * dff + tmp
-    dff = dff / np.sum(dff)  # normalize dff
+    # dff = dff / np.sum(dff)  # normalize dff
 
 
 # update fire
@@ -474,7 +479,11 @@ class Pedestrain:
         return s
 
     def get_D(self):
-        return dff[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
+        d = dff[self.x - 1:self.x + 2, self.y - 1:self.y + 2]
+        if np.sum(d) == 0:
+            return d
+        else:
+            return d / np.sum(d)  # normalize dff
 
     def in_catwalk(self):  # decide if pedestrian is in a catwalk, return T, F
         obstacle = self.epsilon
@@ -598,9 +607,9 @@ def init():
     # define exits
     exit_cells = frozenset((
         (dim_x // 2 - 1, dim_y - 1), (dim_x // 2, dim_y - 1),
-        # (dim_x - 1, dim_y // 2), (dim_x - 1, dim_y // 2 - 1),
-        # (0, dim_y // 2 - 1), (0, dim_y // 2),
-        # (dim_x // 2 - 1, 0), (dim_x // 2, 0),
+         #(dim_x - 1, dim_y // 2), (dim_x - 1, dim_y // 2 - 1),
+         (0, dim_y // 2 - 1), (0, dim_y // 2),
+         (dim_x // 2 - 1, 0), (dim_x // 2, 0),
     ))
 
     # fire_cells = {(4, 4), (4, 5), (5, 4), (5, 5)}
